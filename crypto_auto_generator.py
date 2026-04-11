@@ -2440,27 +2440,64 @@ if "collected_news" in st.session_state and st.session_state["collected_news"]:
                     if yt_match:
                         st.image(f"https://img.youtube.com/vi/{yt_match.group(1)}/hqdefault.jpg", use_container_width=True)
 
-                    # 다운로드 버튼
-                    if st.button(f"⬇️ 동영상 다운로드", key=f"dl_vid_{i}"):
-                        with st.spinner("동영상 다운로드 중..."):
-                            dl_dir = os.path.join(output_dir, "다운로드_영상")
-                            os.makedirs(dl_dir, exist_ok=True)
-                            safe_name = re.sub(r'[^\w]', '', news["title_en"])[:30]
-                            saved_path = download_video_ytdlp(video_url, dl_dir, safe_name)
-                            if saved_path and os.path.exists(saved_path):
-                                with open(saved_path, "rb") as vf:
-                                    video_bytes = vf.read()
-                                fname = os.path.basename(saved_path)
-                                st.download_button(
-                                    label=f"📱 핸드폰에 저장: {fname}",
-                                    data=video_bytes,
-                                    file_name=fname,
-                                    mime="video/mp4",
-                                    key=f"save_vid_{i}"
-                                )
-                                st.success("다운로드 준비 완료! 위 버튼을 눌러 저장하세요.")
-                            else:
-                                st.warning("다운로드 실패. 영상 URL을 직접 복사해서 사용하세요.")
+                    # X/Twitter 영상인지 확인
+                    is_twitter = any(d in video_url for d in ["twitter.com", "x.com", "t.co"])
+                    is_youtube = bool(yt_match)
+                    is_direct_mp4 = video_url.lower().endswith(".mp4")
+
+                    if is_twitter:
+                        # X/Twitter 영상 → 외부 다운로드 서비스 연결
+                        # URL에서 트윗 ID 추출
+                        tweet_url = video_url.split("?")[0]  # 쿼리 파라미터 제거
+                        sss_url = f"https://ssstwitter.com/id?url={tweet_url}"
+                        save_url = f"https://twitsave.com/info?url={tweet_url}"
+
+                        st.markdown("**X/Twitter 영상은 외부 서비스로 다운로드:**")
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            st.link_button("🔽 ssstwitter로 다운", sss_url)
+                        with col_b:
+                            st.link_button("🔽 twitsave로 다운", save_url)
+                        st.caption("위 버튼 클릭 → 사이트에서 Download 누르면 핸드폰에 저장됩니다")
+                    else:
+                        # YouTube / 직접 mp4 → yt-dlp 다운로드 시도
+                        if st.button(f"⬇️ 동영상 다운로드", key=f"dl_vid_{i}"):
+                            with st.spinner("동영상 다운로드 중..."):
+                                dl_dir = os.path.join(output_dir, "다운로드_영상")
+                                os.makedirs(dl_dir, exist_ok=True)
+                                safe_name = re.sub(r'[^\w]', '', news["title_en"])[:30]
+
+                                # 직접 mp4면 requests로 바로 다운로드
+                                saved_path = ""
+                                if is_direct_mp4:
+                                    try:
+                                        resp = requests.get(video_url, timeout=60, stream=True)
+                                        if resp.status_code == 200:
+                                            mp4_path = os.path.join(dl_dir, f"{safe_name}.mp4")
+                                            with open(mp4_path, "wb") as f:
+                                                for chunk in resp.iter_content(chunk_size=8192):
+                                                    f.write(chunk)
+                                            saved_path = mp4_path
+                                    except Exception:
+                                        pass
+
+                                if not saved_path:
+                                    saved_path = download_video_ytdlp(video_url, dl_dir, safe_name)
+
+                                if saved_path and os.path.exists(saved_path):
+                                    with open(saved_path, "rb") as vf:
+                                        video_bytes = vf.read()
+                                    fname = os.path.basename(saved_path)
+                                    st.download_button(
+                                        label=f"📱 핸드폰에 저장: {fname}",
+                                        data=video_bytes,
+                                        file_name=fname,
+                                        mime="video/mp4",
+                                        key=f"save_vid_{i}"
+                                    )
+                                    st.success("다운로드 준비 완료! 위 버튼을 눌러 저장하세요.")
+                                else:
+                                    st.warning("다운로드 실패. 영상 URL을 직접 복사해서 사용하세요.")
 
                 # ── 본문 미리보기 ──
                 full_text = news.get("full_text", news.get("summary_en", ""))
