@@ -997,25 +997,26 @@ def extract_video_from_rss(entry) -> str:
 
 
 def download_video_ytdlp(video_url: str, save_dir: str, filename: str = "video") -> str:
-    """yt-dlp로 동영상 다운로드 (YouTube, X/Twitter, mp4 등 지원)"""
+    """yt-dlp Python API로 동영상 다운로드 (Streamlit Cloud 호환)"""
     try:
+        import yt_dlp
+        os.makedirs(save_dir, exist_ok=True)
         out_path = os.path.join(save_dir, f"{filename}.%(ext)s")
-        cmd = [
-            "yt-dlp",
-            "--no-playlist",
-            "-f", "best[ext=mp4]/best",
-            "-o", out_path,
-            "--no-warnings",
-            "--quiet",
-            video_url,
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if result.returncode == 0:
-            # 실제 저장된 파일 찾기
-            for f in os.listdir(save_dir):
-                if f.startswith(filename) and not f.endswith(".part"):
-                    return os.path.join(save_dir, f)
-    except FileNotFoundError:
+        ydl_opts = {
+            'format': 'best[ext=mp4]/best',
+            'outtmpl': out_path,
+            'noplaylist': True,
+            'quiet': True,
+            'no_warnings': True,
+            'socket_timeout': 30,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
+        # 실제 저장된 파일 찾기
+        for f in os.listdir(save_dir):
+            if f.startswith(filename) and not f.endswith(".part"):
+                return os.path.join(save_dir, f)
+    except ImportError:
         pass  # yt-dlp 미설치
     except Exception:
         pass
@@ -2441,15 +2442,25 @@ if "collected_news" in st.session_state and st.session_state["collected_news"]:
 
                     # 다운로드 버튼
                     if st.button(f"⬇️ 동영상 다운로드", key=f"dl_vid_{i}"):
-                        with st.spinner("동영상 다운로드 중... (yt-dlp)"):
+                        with st.spinner("동영상 다운로드 중..."):
                             dl_dir = os.path.join(output_dir, "다운로드_영상")
                             os.makedirs(dl_dir, exist_ok=True)
                             safe_name = re.sub(r'[^\w]', '', news["title_en"])[:30]
                             saved_path = download_video_ytdlp(video_url, dl_dir, safe_name)
-                            if saved_path:
-                                st.success(f"다운로드 완료: {saved_path}")
+                            if saved_path and os.path.exists(saved_path):
+                                with open(saved_path, "rb") as vf:
+                                    video_bytes = vf.read()
+                                fname = os.path.basename(saved_path)
+                                st.download_button(
+                                    label=f"📱 핸드폰에 저장: {fname}",
+                                    data=video_bytes,
+                                    file_name=fname,
+                                    mime="video/mp4",
+                                    key=f"save_vid_{i}"
+                                )
+                                st.success("다운로드 준비 완료! 위 버튼을 눌러 저장하세요.")
                             else:
-                                st.warning("yt-dlp 미설치 또는 다운로드 실패.\n`pip install yt-dlp` 로 설치하세요.")
+                                st.warning("다운로드 실패. 영상 URL을 직접 복사해서 사용하세요.")
 
                 # ── 본문 미리보기 ──
                 full_text = news.get("full_text", news.get("summary_en", ""))
