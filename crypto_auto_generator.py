@@ -188,6 +188,26 @@ X_INFLUENCERS = {
     "📰 CryptoRank":        "CryptoRank_io",
     "📰 Bitcoin News":      "BitcoinNewsCom",
     # ═══════════════════════════════════════════════
+    #  🎙️ 1차 소스 (Bloomberg, 기관, 저널리스트 — 인플루언서들이 인용하는 원본)
+    # ═══════════════════════════════════════════════
+    "🎙️ James Seyffart":    "JSeyff",
+    "🎙️ Eric Balchunas":    "EricBalchunas",
+    "🎙️ Nate Geraci":       "NateGeraci",
+    "🎙️ Scott Melker":      "ScottMelker",
+    "🎙️ Nic Carter":        "nic__carter",
+    "🎙️ Adam Back":          "adam3us",
+    "🎙️ Dan Held":           "danheld",
+    "🎙️ The Kobeissi Letter": "KobeissiLetter",
+    "🎙️ Crypto Town Hall":  "cryptotownhall",
+    # ── 거래소/기관 공식 계정 ──
+    "🏛️ Binance":            "binance",
+    "🏛️ Coinbase":           "coinbase",
+    "🏛️ Grayscale":          "Grayscale",
+    "🏛️ BlackRock":          "BlackRock",
+    "🏛️ Fidelity Crypto":   "FidelityCrypto",
+    "🏛️ Bloomberg Crypto":  "crypto",
+    "🏛️ Reuters Biz":       "ReutersBiz",
+    # ═══════════════════════════════════════════════
     #  온체인/데이터 계정 (BitcoinSapiens 주요 소스)
     # ═══════════════════════════════════════════════
     "⚡ BitcoinSapiens":    "BitcoinSapiens",
@@ -2436,6 +2456,14 @@ with st.sidebar:
         "📰 크립토 미디어": ["📰 CoinDesk X", "📰 Cointelegraph X", "📰 The Block X",
                             "📰 Decrypt X", "📰 Wu Blockchain", "📰 CryptoRank",
                             "📰 Bitcoin News"],
+        "🎙️ 1차 소스 (Bloomberg/기관)": ["🎙️ James Seyffart", "🎙️ Eric Balchunas",
+                                        "🎙️ Nate Geraci", "🎙️ Scott Melker",
+                                        "🎙️ Nic Carter", "🎙️ Adam Back",
+                                        "🎙️ Dan Held", "🎙️ The Kobeissi Letter",
+                                        "🎙️ Crypto Town Hall"],
+        "🏛️ 거래소/기관 공식": ["🏛️ Binance", "🏛️ Coinbase", "🏛️ Grayscale",
+                                "🏛️ BlackRock", "🏛️ Fidelity Crypto",
+                                "🏛️ Bloomberg Crypto", "🏛️ Reuters Biz"],
         "📊 온체인/데이터": ["⚡ BitcoinSapiens", "📺 Simply Bitcoin", "📊 TrendingBTC",
                              "📉 Bitcoin Archive", "📊 Bitcoin Mag Pro", "📊 Glassnode",
                              "🔎 CryptoQuant", "🐋 Santiment", "🔵 Swan Bitcoin"],
