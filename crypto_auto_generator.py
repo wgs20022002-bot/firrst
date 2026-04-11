@@ -2288,10 +2288,14 @@ with st.sidebar:
                 continue
             cat_key = f"feed_cat_{cat_name}"
             cat_checked = st.checkbox(f"**{cat_name}** ({len(valid_feeds)}개)", value=False, key=cat_key)
+            # 카테고리 체크 시 하위 항목 session_state 동기화
+            for feed in valid_feeds:
+                feed_key = f"feed_{feed}"
+                if cat_key in st.session_state:
+                    st.session_state[feed_key] = st.session_state[cat_key]
             with st.expander(cat_name, expanded=cat_checked):
                 for feed in valid_feeds:
-                    default_val = True if cat_checked else False
-                    checked = st.checkbox(feed, value=default_val, key=f"feed_{feed}")
+                    checked = st.checkbox(feed, value=False, key=f"feed_{feed}")
                     if checked:
                         selected_feeds.append(feed)
     else:
@@ -2358,10 +2362,14 @@ with st.sidebar:
                 continue
             cat_key = f"inf_cat_{cat_name}"
             cat_checked = st.checkbox(f"**{cat_name}** ({len(valid_infs)}개)", value=False, key=cat_key)
+            # 카테고리 체크 시 하위 항목 session_state 동기화
+            for inf in valid_infs:
+                inf_key = f"inf_{inf}"
+                if cat_key in st.session_state:
+                    st.session_state[inf_key] = st.session_state[cat_key]
             with st.expander(cat_name, expanded=cat_checked):
                 for inf in valid_infs:
-                    default_val = True if cat_checked else False
-                    checked = st.checkbox(inf, value=default_val, key=f"inf_{inf}")
+                    checked = st.checkbox(inf, value=False, key=f"inf_{inf}")
                     if checked:
                         selected_influencers.append(inf)
     else:
