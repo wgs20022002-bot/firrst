@@ -1320,10 +1320,10 @@ def fetch_x_influencer(display_name: str, handle: str, count: int = 5):
         data = _json.loads(match.group(1))
         entries = data.get("props", {}).get("pageProps", {}).get("timeline", {}).get("entries", [])
 
-        tweet_count = 0
+        # 모든 트윗 파싱 후 최신순 정렬
+        from datetime import datetime as _dt, timezone as _tz
+        all_tweets = []
         for entry in entries:
-            if tweet_count >= count:
-                break
             if entry.get("type") != "tweet":
                 continue
 
@@ -1337,6 +1337,17 @@ def fetch_x_influencer(display_name: str, handle: str, count: int = 5):
                 continue
 
             created_at = tweet.get("created_at", "")
+            # 날짜 파싱 (정렬용)
+            try:
+                tweet_dt = _dt.strptime(created_at, "%a %b %d %H:%M:%S %z %Y")
+            except Exception:
+                tweet_dt = _dt(2000, 1, 1, tzinfo=_tz.utc)
+
+            # 90일(약 3개월) 이상 지난 트윗은 제외
+            days_old = (_dt.now(_tz.utc) - tweet_dt).days
+            if days_old > 90:
+                continue
+
             tweet_id = tweet.get("id_str", "")
             user_handle = tweet.get("user", {}).get("screen_name", handle)
             link = f"https://x.com/{user_handle}/status/{tweet_id}" if tweet_id else f"https://x.com/{handle}"
@@ -1354,23 +1365,31 @@ def fetch_x_influencer(display_name: str, handle: str, count: int = 5):
                     if mp4s:
                         video_url = max(mp4s, key=lambda v: v.get("bitrate", 0)).get("url", "")
 
-            # 제목 1차 번역 (미리보기용)
-            title_ko = quick_translate_title(text_en[:200])
-
-            results.append({
-                "title_en": text_en[:200],
-                "title_ko": title_ko,
-                "summary_en": text_en,
-                "summary_ko": "",
-                "full_text": text_en,
-                "published": created_at,
+            all_tweets.append((tweet_dt, {
+                "text_en": text_en,
+                "created_at": created_at,
                 "link": link,
-                "source": f"🐦 {display_name}",
-                "video_url": video_url,
                 "image_url": image_url,
+                "video_url": video_url,
+            }))
+
+        # 최신순 정렬 후 count개만 선택
+        all_tweets.sort(key=lambda x: x[0], reverse=True)
+        for _, tw in all_tweets[:count]:
+            title_ko = quick_translate_title(tw["text_en"][:200])
+            results.append({
+                "title_en": tw["text_en"][:200],
+                "title_ko": title_ko,
+                "summary_en": tw["text_en"],
+                "summary_ko": "",
+                "full_text": tw["text_en"],
+                "published": tw["created_at"],
+                "link": tw["link"],
+                "source": f"🐦 {display_name}",
+                "video_url": tw["video_url"],
+                "image_url": tw["image_url"],
                 "is_korean": False,
             })
-            tweet_count += 1
 
     except Exception:
         pass
