@@ -1,0 +1,6 @@
+streamlit
+feedparser
+anthropic
+deep_translator
+requests
+beautifulsoup4
