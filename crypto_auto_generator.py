@@ -110,9 +110,9 @@ TESLA_KEYWORDS = [
 ]
 
 # ─────────────────────────────────────────────
-#  X(트위터) Syndication API (Nitter 대체)
+#  Google News RSS (인플루언서 뉴스 수집)
 # ─────────────────────────────────────────────
-X_SYNDICATION_URL = "https://syndication.twitter.com/srv/timeline-profile/screen-name/{handle}"
+GOOGLE_NEWS_RSS = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
 
 # ─────────────────────────────────────────────
 #  X 인플루언서 계정 (Nitter RSS로 수집)
@@ -120,114 +120,74 @@ X_SYNDICATION_URL = "https://syndication.twitter.com/srv/timeline-profile/screen
 X_INFLUENCERS = {
     # ═══════════════════════════════════════════════
     #  ⭐ VIP — 이 사람들의 코인 발언은 무조건 최우선
+    #  값 = Google News 검색 쿼리
     # ═══════════════════════════════════════════════
-    "⭐ Michael Saylor":    "saylor",
-    "⭐ Elon Musk":         "elonmusk",
-    "⭐ Donald Trump":      "realDonaldTrump",
-    "⭐ Jim Cramer":        "jimcramer",
-    "⭐ CZ (Binance)":      "cz_binance",
-    "⭐ Larry Fink":        "BlackRock",
-    "⭐ Cathie Wood":       "CathieDWood",
-    "⭐ Arthur Hayes":      "CryptoHayes",
-    "⭐ Vitalik Buterin":   "VitalikButerin",
-    "⭐ Justin Sun":        "justinsuntron",
-    "⭐ Brian Armstrong":   "brian_armstrong",
-    "⭐ Jack Dorsey":       "jack",
-    "⭐ Robert Kiyosaki":   "theRealKiyosaki",
+    "⭐ Michael Saylor":    "Michael+Saylor+bitcoin+OR+BTC+OR+Strategy",
+    "⭐ Elon Musk":         "Elon+Musk+bitcoin+OR+crypto+OR+dogecoin",
+    "⭐ Donald Trump":      "Trump+bitcoin+OR+crypto+OR+digital+asset",
+    "⭐ Jim Cramer":        "Jim+Cramer+bitcoin+OR+crypto",
+    "⭐ CZ (Binance)":      "CZ+Binance+OR+%22Changpeng+Zhao%22+crypto",
+    "⭐ Larry Fink":        "Larry+Fink+bitcoin+OR+BlackRock+crypto+OR+ETF",
+    "⭐ Cathie Wood":       "Cathie+Wood+bitcoin+OR+crypto+OR+ARK",
+    "⭐ Arthur Hayes":      "Arthur+Hayes+bitcoin+OR+crypto+OR+BitMEX",
+    "⭐ Vitalik Buterin":   "Vitalik+Buterin+ethereum+OR+crypto",
+    "⭐ Justin Sun":        "Justin+Sun+TRON+OR+crypto",
+    "⭐ Brian Armstrong":   "Brian+Armstrong+Coinbase+OR+crypto",
+    "⭐ Jack Dorsey":       "Jack+Dorsey+bitcoin+OR+Block+crypto",
+    "⭐ Robert Kiyosaki":   "Robert+Kiyosaki+bitcoin+OR+crypto",
     # ═══════════════════════════════════════════════
-    #  속보/뉴스 계정
+    #  🎙️ 1차 소스 (Bloomberg, 기관, 저널리스트)
     # ═══════════════════════════════════════════════
-    "🔔 Watcher Guru":      "WatcherGuru",
-    "📊 Tier10k (db)":      "tier10k",
-    "🐳 Whale Alert":       "whale_alert",
-    "🦅 ZachXBT":           "zachxbt",
-    "📡 Unusual Whales":    "unusual_whales",
-    "🌍 Mario Nawfal":      "RoundtableSpace",
-    "🐋 Lookonchain":       "lookonchain",
+    "🎙️ James Seyffart":    "James+Seyffart+bitcoin+OR+ETF+OR+crypto",
+    "🎙️ Eric Balchunas":    "Eric+Balchunas+bitcoin+OR+ETF+OR+crypto",
+    "🎙️ Nate Geraci":       "Nate+Geraci+ETF+OR+bitcoin+OR+crypto",
+    "🎙️ Scott Melker":      "Scott+Melker+crypto+OR+bitcoin",
+    "🎙️ The Kobeissi Letter": "Kobeissi+Letter+market+OR+bitcoin+OR+crypto",
     # ═══════════════════════════════════════════════
-    #  트레이더/분석가
+    #  🏛️ 거래소/기관 공식
     # ═══════════════════════════════════════════════
-    "⚡ Samson Mow":        "Excellion",
-    "📊 Raoul Pal":         "RaoulGMI",
-    "🐂 Pompliano":         "APompliano",
-    "🎯 Willy Woo":         "woonomic",
-    "📉 Peter Schiff":      "PeterSchiff",
-    "📐 Peter Brandt":      "PeterLBrandt",
-    "🦈 Barry Silbert":     "BarrySilbert",
-    "🏦 Tom Lee":           "fundstrat",
-    "📊 Will Clemente":     "WClementeIII",
-    "🔵 Kevin O'Leary":     "kevinolearytv",
-    "💰 Mark Cuban":        "mcuban",
+    "🏛️ Binance":            "Binance+crypto+OR+bitcoin+OR+BNB",
+    "🏛️ Coinbase":           "Coinbase+crypto+OR+bitcoin+OR+SEC",
+    "🏛️ Grayscale":          "Grayscale+bitcoin+OR+ETF+OR+crypto",
+    "🏛️ BlackRock ETF":      "BlackRock+bitcoin+ETF+OR+IBIT+OR+crypto",
+    "🏛️ Fidelity Crypto":    "Fidelity+bitcoin+OR+crypto+OR+ETF",
     # ═══════════════════════════════════════════════
-    #  🌍 대형 글로벌 크립토 인플루언서
+    #  🔔 속보/뉴스 키워드
     # ═══════════════════════════════════════════════
-    "🌍 Miles Deutscher":   "milesdeutscher",
-    "🌍 Ansem":             "blknoiz06",
-    "🌍 Michaël van de Poppe": "CryptoMichNL",
-    "🌍 Lark Davis":        "TheCryptoLark",
-    "🌍 Ben Cowen":         "intocryptoverse",
-    "🌍 Rekt Capital":      "raborchain_",
-    "🌍 Ali Martinez":      "ali_charts",
-    "🌍 Crypto Banter":     "crypto_banter",
-    "🌍 Altcoin Gordon":    "AltcoinGordon",
-    "🌍 Hsaka":             "HsakaTrades",
-    "🌍 Pentoshi":          "Pentosh1",
-    "🌍 DaanCrypto":        "DaanCrypto",
-    "🌍 DefiIgnas":         "DefiIgnas",
-    "🌍 Crypto Rover":      "CryptoRover00",
-    "🌍 IncomeSharks":      "IncomeSharks",
-    "🌍 EmberCN":           "EmberCN",
+    "🔔 BTC 속보":           "bitcoin+breaking+OR+surge+OR+crash+OR+SEC+OR+ETF",
+    "🔔 ETH 속보":           "ethereum+breaking+OR+upgrade+OR+ETF+OR+staking",
+    "🔔 고래/온체인":        "bitcoin+whale+OR+%22on-chain%22+OR+exchange+outflow",
+    "🔔 ETF 자금흐름":       "bitcoin+ETF+inflow+OR+outflow+OR+record",
+    "🔔 규제/SEC":           "SEC+crypto+OR+bitcoin+regulation+OR+lawsuit",
     # ═══════════════════════════════════════════════
-    #  📰 대형 크립토 미디어 X 계정
+    #  📈 트레이더/분석가
     # ═══════════════════════════════════════════════
-    "📰 CoinDesk X":        "CoinDesk",
-    "📰 Cointelegraph X":   "Cointelegraph",
-    "📰 The Block X":       "TheBlock__",
-    "📰 Decrypt X":         "decaborchain_",
-    "📰 Wu Blockchain":     "WuBlockchain",
-    "📰 CryptoRank":        "CryptoRank_io",
-    "📰 Bitcoin News":      "BitcoinNewsCom",
+    "📈 Raoul Pal":          "Raoul+Pal+bitcoin+OR+crypto+OR+macro",
+    "📈 Pompliano":          "Anthony+Pompliano+bitcoin+OR+crypto",
+    "📈 Peter Schiff":       "Peter+Schiff+bitcoin+OR+gold+OR+crypto",
+    "📈 Willy Woo":          "Willy+Woo+bitcoin+OR+on-chain",
+    "📈 PlanB":              "PlanB+bitcoin+OR+stock-to-flow",
+    "📈 Tom Lee":            "Tom+Lee+Fundstrat+bitcoin+OR+crypto",
     # ═══════════════════════════════════════════════
-    #  🎙️ 1차 소스 (Bloomberg, 기관, 저널리스트 — 인플루언서들이 인용하는 원본)
+    #  🌍 대형 글로벌 인플루언서
     # ═══════════════════════════════════════════════
-    "🎙️ James Seyffart":    "JSeyff",
-    "🎙️ Eric Balchunas":    "EricBalchunas",
-    "🎙️ Nate Geraci":       "NateGeraci",
-    "🎙️ Scott Melker":      "ScottMelker",
-    "🎙️ Nic Carter":        "nic__carter",
-    "🎙️ Adam Back":          "adam3us",
-    "🎙️ Dan Held":           "danheld",
-    "🎙️ The Kobeissi Letter": "KobeissiLetter",
-    "🎙️ Crypto Town Hall":  "cryptotownhall",
-    # ── 거래소/기관 공식 계정 ──
-    "🏛️ Binance":            "binance",
-    "🏛️ Coinbase":           "coinbase",
-    "🏛️ Grayscale":          "Grayscale",
-    "🏛️ BlackRock":          "BlackRock",
-    "🏛️ Fidelity Crypto":   "FidelityCrypto",
-    "🏛️ Bloomberg Crypto":  "crypto",
-    "🏛️ Reuters Biz":       "ReutersBiz",
+    "🌍 Miles Deutscher":    "Miles+Deutscher+crypto+OR+altcoin",
+    "🌍 Ben Cowen":          "Benjamin+Cowen+bitcoin+OR+crypto",
+    "🌍 Lark Davis":         "Lark+Davis+crypto+OR+bitcoin",
+    "🌍 Rekt Capital":       "Rekt+Capital+bitcoin+OR+crypto+OR+halving",
+    "🌍 Ali Martinez":       "Ali+Martinez+bitcoin+OR+crypto+OR+chart",
+    "🌍 Crypto Banter":      "Crypto+Banter+bitcoin+OR+altcoin",
     # ═══════════════════════════════════════════════
-    #  온체인/데이터 계정 (BitcoinSapiens 주요 소스)
+    #  📊 온체인/데이터
     # ═══════════════════════════════════════════════
-    "⚡ BitcoinSapiens":    "BitcoinSapiens",
-    "📺 Simply Bitcoin":    "SimplyBitcoinTV",
-    "📊 Tuur Demeester":    "TuurDemeester",
-    "📈 Dylan LeClair":     "DylanLeClair_",
-    "📊 Glassnode":         "glassnode",
-    "🔎 CryptoQuant":       "cryptoquant_com",
-    "🐋 Santiment":         "santaborit_d",
-    "📊 TrendingBTC":       "TrendingBitcoin",
-    "📉 Bitcoin Archive":   "BTC_Archive",
-    "📊 Bitcoin Mag Pro":   "BitcoinMagPro",
-    "🔵 Swan Bitcoin":      "SwanBitcoin",
+    "📊 Glassnode":          "Glassnode+bitcoin+OR+on-chain+OR+metric",
+    "📊 CryptoQuant":        "CryptoQuant+bitcoin+OR+exchange+OR+whale",
+    "📊 Santiment":          "Santiment+bitcoin+OR+crypto+OR+sentiment",
+    "📊 Lookonchain":        "Lookonchain+whale+OR+bitcoin+OR+crypto",
     # ═══════════════════════════════════════════════
-    #  한국 인플루언서
+    #  🇰🇷 한국
     # ═══════════════════════════════════════════════
-    "🇰🇷 CryptoYuna":      "CryptoYuna_",
-    "🇰🇷 김영훈 IQ276":    "yhbryankim",
-    "🇰🇷 Ki Young Ju":     "ki_young_ju",
-    "🇰🇷 코인니스":        "coinness_kr",
+    "🇰🇷 한국 크립토":      "%ED%95%9C%EA%B5%AD+%EB%B9%84%ED%8A%B8%EC%BD%94%EC%9D%B8+OR+%EC%95%94%ED%98%B8%ED%99%94%ED%8F%90",
 }
 
 # ── VIP 인물 목록: 이 계정의 포스트는 이슈성 점수 대폭 가산 ──
@@ -1350,128 +1310,46 @@ def summarize_text(text: str, translator=None, max_sentences: int = 5) -> str:
         return summary_en
 
 
-def _fetch_syndication_html(handle: str) -> str:
-    """Syndication API HTML 가져오기 (캐시 + rate limit 대응)"""
-    import time as _time
-    for attempt in range(3):
-        try:
-            url = X_SYNDICATION_URL.format(handle=handle)
-            resp = requests.get(url, headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }, timeout=15)
-            if resp.status_code == 429:
-                _time.sleep(5 + attempt * 5)  # 5초, 10초, 15초 대기
-                continue
-            if resp.status_code == 200:
-                return resp.text
-            return ""
-        except Exception:
-            return ""
-    return ""
-
-# 메모리 캐시: {handle: (timestamp, html)} — 같은 세션 내 중복 요청 방지
-_syndication_cache = {}
-_CACHE_TTL = 600  # 10분
-
-def _get_syndication_cached(handle: str) -> str:
-    """캐시된 Syndication HTML 반환 (10분 TTL)"""
-    import time as _time
-    now = _time.time()
-    if handle in _syndication_cache:
-        ts, html = _syndication_cache[handle]
-        if now - ts < _CACHE_TTL:
-            return html
-    html = _fetch_syndication_html(handle)
-    if html:
-        _syndication_cache[handle] = (now, html)
-    return html
-
-
-def fetch_x_influencer(display_name: str, handle: str, count: int = 5):
-    """X 인플루언서 피드를 Twitter Syndication API로 수집"""
+def fetch_x_influencer(display_name: str, query: str, count: int = 5):
+    """Google News RSS로 인플루언서/키워드 관련 뉴스 수집"""
     results = []
-    html = _get_syndication_cached(handle)
-    if not html:
-        return results
-
     try:
-        # __NEXT_DATA__ JSON 추출
-        import re as _re, json as _json
-        match = _re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html)
-        if not match:
+        feed_url = GOOGLE_NEWS_RSS.format(query=query)
+        feed = feedparser.parse(feed_url)
+        if not feed.entries:
             return results
 
-        data = _json.loads(match.group(1))
-        entries = data.get("props", {}).get("pageProps", {}).get("timeline", {}).get("entries", [])
-
-        # 모든 트윗 파싱 후 최신순 정렬
-        from datetime import datetime as _dt, timezone as _tz
-        all_tweets = []
-        for entry in entries:
-            if entry.get("type") != "tweet":
+        for entry in feed.entries[:count]:
+            title_en = clean_text(entry.get("title", ""))
+            if not title_en or len(title_en) < 10:
                 continue
 
-            tweet = entry.get("content", {}).get("tweet", {})
-            text_en = clean_text(tweet.get("text", ""))
-            if not text_en or len(text_en) < 10:
-                continue
+            published = entry.get("published", "")
+            link = entry.get("link", "")
+            # Google News 소스 추출 (제목 뒤에 " - 매체명" 형태)
+            source_media = ""
+            if " - " in title_en:
+                parts = title_en.rsplit(" - ", 1)
+                title_en = parts[0]
+                source_media = parts[1] if len(parts) > 1 else ""
 
-            # RT 필터링
-            if text_en.startswith("RT @") or text_en.startswith("RT:"):
-                continue
+            summary_en = clean_text(entry.get("summary", entry.get("description", "")))
+            # HTML 태그 제거
+            summary_en = re.sub(r'<[^>]+>', '', summary_en)
 
-            created_at = tweet.get("created_at", "")
-            # 날짜 파싱 (정렬용)
-            try:
-                tweet_dt = _dt.strptime(created_at, "%a %b %d %H:%M:%S %z %Y")
-            except Exception:
-                tweet_dt = _dt(2000, 1, 1, tzinfo=_tz.utc)
+            title_ko = quick_translate_title(title_en[:200])
 
-            # 7일 이상 지난 트윗은 제외 (최신 정보만)
-            days_old = (_dt.now(_tz.utc) - tweet_dt).days
-            if days_old > 7:
-                continue
-
-            tweet_id = tweet.get("id_str", "")
-            user_handle = tweet.get("user", {}).get("screen_name", handle)
-            link = f"https://x.com/{user_handle}/status/{tweet_id}" if tweet_id else f"https://x.com/{handle}"
-
-            # 이미지/비디오 추출
-            image_url = ""
-            video_url = ""
-            media_list = tweet.get("mediaDetails", [])
-            for m in media_list:
-                if m.get("type") == "photo" and not image_url:
-                    image_url = m.get("media_url_https", "")
-                elif m.get("type") == "video" and not video_url:
-                    variants = m.get("video_info", {}).get("variants", [])
-                    mp4s = [v for v in variants if v.get("content_type") == "video/mp4"]
-                    if mp4s:
-                        video_url = max(mp4s, key=lambda v: v.get("bitrate", 0)).get("url", "")
-
-            all_tweets.append((tweet_dt, {
-                "text_en": text_en,
-                "created_at": created_at,
-                "link": link,
-                "image_url": image_url,
-                "video_url": video_url,
-            }))
-
-        # 최신순 정렬 후 count개만 선택
-        all_tweets.sort(key=lambda x: x[0], reverse=True)
-        for _, tw in all_tweets[:count]:
-            title_ko = quick_translate_title(tw["text_en"][:200])
             results.append({
-                "title_en": tw["text_en"][:200],
+                "title_en": title_en[:200],
                 "title_ko": title_ko,
-                "summary_en": tw["text_en"],
+                "summary_en": summary_en if summary_en else title_en,
                 "summary_ko": "",
-                "full_text": tw["text_en"],
-                "published": tw["created_at"],
-                "link": tw["link"],
-                "source": f"🐦 {display_name}",
-                "video_url": tw["video_url"],
-                "image_url": tw["image_url"],
+                "full_text": summary_en if summary_en else title_en,
+                "published": published,
+                "link": link,
+                "source": f"🔍 {display_name}" + (f" ({source_media})" if source_media else ""),
+                "video_url": "",
+                "image_url": "",
                 "is_korean": False,
             })
 
@@ -1549,7 +1427,7 @@ def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=
         except Exception as e:
             continue
 
-    # ── X 인플루언서 피드 수집 (Syndication API) ──
+    # ── X 인플루언서 피드 수집 (Google News RSS) ──
     import time as _time
     for idx, display_name in enumerate(influencer_names):
         step += 1
@@ -1566,10 +1444,8 @@ def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=
         except Exception:
             continue
 
-        # Rate limit 방지: 매 요청마다 1초, 5개마다 추가 3초 대기
-        _time.sleep(1)
-        if (idx + 1) % 5 == 0:
-            _time.sleep(3)
+        # Google News RSS 부하 방지: 최소 딜레이
+        _time.sleep(0.3)
 
     # 이슈성 점수 계산
     for item in all_items:
@@ -2427,12 +2303,14 @@ with st.sidebar:
         # VIP 핵심 인물
         "⭐ Michael Saylor", "⭐ Elon Musk", "⭐ Donald Trump",
         "⭐ Jim Cramer", "⭐ CZ (Binance)", "⭐ Larry Fink",
-        # 온체인/데이터 (BitcoinSapiens 소스)
-        "⚡ BitcoinSapiens", "📊 TrendingBTC", "📉 Bitcoin Archive",
-        # 속보 계정
-        "🔔 Watcher Guru", "📊 Tier10k (db)", "🐋 Lookonchain",
+        # 1차 소스
+        "🎙️ James Seyffart", "🎙️ Eric Balchunas",
+        # 속보/뉴스
+        "🔔 BTC 속보", "🔔 ETF 자금흐름", "🔔 고래/온체인",
+        # 온체인/데이터
+        "📊 Glassnode", "📊 Lookonchain",
         # 한국
-        "🇰🇷 CryptoYuna", "🇰🇷 코인니스",
+        "🇰🇷 한국 크립토",
     }
 
     inf_mode = st.radio(
@@ -2449,34 +2327,22 @@ with st.sidebar:
                         "⭐ Cathie Wood", "⭐ Arthur Hayes", "⭐ Vitalik Buterin",
                         "⭐ Justin Sun", "⭐ Brian Armstrong", "⭐ Jack Dorsey",
                         "⭐ Robert Kiyosaki"],
-        "🌍 글로벌 대형 인플루언서": ["🌍 Miles Deutscher", "🌍 Ansem", "🌍 Michaël van de Poppe",
-                                     "🌍 Lark Davis", "🌍 Ben Cowen", "🌍 Rekt Capital",
-                                     "🌍 Ali Martinez", "🌍 Crypto Banter", "🌍 Altcoin Gordon",
-                                     "🌍 Hsaka", "🌍 Pentoshi", "🌍 DaanCrypto",
-                                     "🌍 DefiIgnas", "🌍 Crypto Rover", "🌍 IncomeSharks",
-                                     "🌍 EmberCN"],
-        "📰 크립토 미디어": ["📰 CoinDesk X", "📰 Cointelegraph X", "📰 The Block X",
-                            "📰 Decrypt X", "📰 Wu Blockchain", "📰 CryptoRank",
-                            "📰 Bitcoin News"],
         "🎙️ 1차 소스 (Bloomberg/기관)": ["🎙️ James Seyffart", "🎙️ Eric Balchunas",
                                         "🎙️ Nate Geraci", "🎙️ Scott Melker",
-                                        "🎙️ Nic Carter", "🎙️ Adam Back",
-                                        "🎙️ Dan Held", "🎙️ The Kobeissi Letter",
-                                        "🎙️ Crypto Town Hall"],
+                                        "🎙️ The Kobeissi Letter"],
         "🏛️ 거래소/기관 공식": ["🏛️ Binance", "🏛️ Coinbase", "🏛️ Grayscale",
-                                "🏛️ BlackRock", "🏛️ Fidelity Crypto",
-                                "🏛️ Bloomberg Crypto", "🏛️ Reuters Biz"],
-        "📊 온체인/데이터": ["⚡ BitcoinSapiens", "📺 Simply Bitcoin", "📊 TrendingBTC",
-                             "📉 Bitcoin Archive", "📊 Bitcoin Mag Pro", "📊 Glassnode",
-                             "🔎 CryptoQuant", "🐋 Santiment", "🔵 Swan Bitcoin"],
-        "🔔 속보/뉴스": ["🔔 Watcher Guru", "📊 Tier10k (db)", "🐳 Whale Alert",
-                         "🦅 ZachXBT", "📡 Unusual Whales", "🌍 Mario Nawfal", "🐋 Lookonchain"],
-        "📈 트레이더/분석가": ["⚡ Samson Mow", "📊 Raoul Pal", "🐂 Pompliano",
-                              "📊 Tuur Demeester", "📈 Dylan LeClair",
-                              "🎯 Willy Woo", "📉 Peter Schiff", "📐 Peter Brandt",
-                              "🦈 Barry Silbert", "🏦 Tom Lee", "📊 Will Clemente",
-                              "🔵 Kevin O'Leary", "💰 Mark Cuban"],
-        "🇰🇷 한국": ["🇰🇷 CryptoYuna", "🇰🇷 김영훈 IQ276", "🇰🇷 Ki Young Ju", "🇰🇷 코인니스"],
+                                "🏛️ BlackRock ETF", "🏛️ Fidelity Crypto"],
+        "🌍 글로벌 대형 인플루언서": ["🌍 Miles Deutscher", "🌍 Ben Cowen",
+                                     "🌍 Lark Davis", "🌍 Rekt Capital",
+                                     "🌍 Ali Martinez", "🌍 Crypto Banter"],
+        "📈 트레이더/분석가": ["📈 Raoul Pal", "📈 Pompliano",
+                              "📈 Peter Schiff", "📈 Willy Woo",
+                              "📈 PlanB", "📈 Tom Lee"],
+        "📊 온체인/데이터": ["📊 Glassnode", "📊 CryptoQuant",
+                             "📊 Santiment", "📊 Lookonchain"],
+        "🔔 속보/뉴스": ["🔔 BTC 속보", "🔔 ETH 속보", "🔔 고래/온체인",
+                         "🔔 ETF 자금흐름", "🔔 규제/SEC"],
+        "🇰🇷 한국": ["🇰🇷 한국 크립토"],
     }
 
     if inf_mode == "⭐ 추천 계정 (14개)":
