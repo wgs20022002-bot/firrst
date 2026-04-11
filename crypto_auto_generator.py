@@ -1332,13 +1332,25 @@ def summarize_text(text: str, translator=None, max_sentences: int = 5) -> str:
 
 def fetch_x_influencer(display_name: str, handle: str, count: int = 5):
     """X 인플루언서 피드를 Twitter Syndication API로 수집"""
+    import time as _time
     results = []
-    try:
-        url = X_SYNDICATION_URL.format(handle=handle)
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}, timeout=15)
-        if resp.status_code != 200:
+    resp = None
+    for attempt in range(2):
+        try:
+            url = X_SYNDICATION_URL.format(handle=handle)
+            resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}, timeout=15)
+            if resp.status_code == 429:
+                _time.sleep(3 + attempt * 2)
+                continue
+            if resp.status_code != 200:
+                return results
+            break
+        except Exception:
             return results
+    if resp is None or resp.status_code != 200:
+        return results
 
+    try:
         # __NEXT_DATA__ JSON 추출
         import re as _re, json as _json
         match = _re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', resp.text)
@@ -1371,9 +1383,9 @@ def fetch_x_influencer(display_name: str, handle: str, count: int = 5):
             except Exception:
                 tweet_dt = _dt(2000, 1, 1, tzinfo=_tz.utc)
 
-            # 3일 이상 지난 트윗은 제외 (최신 정보만)
+            # 7일 이상 지난 트윗은 제외 (최신 정보만)
             days_old = (_dt.now(_tz.utc) - tweet_dt).days
-            if days_old > 3:
+            if days_old > 7:
                 continue
 
             tweet_id = tweet.get("id_str", "")
@@ -1493,8 +1505,9 @@ def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=
         except Exception as e:
             continue
 
-    # ── X 인플루언서 피드 수집 (Nitter) ──
-    for display_name in influencer_names:
+    # ── X 인플루언서 피드 수집 (Syndication API) ──
+    import time as _time
+    for idx, display_name in enumerate(influencer_names):
         step += 1
         if progress_callback:
             progress_callback(step / total_steps, f"🐦 {display_name} 수집 중...")
@@ -1508,6 +1521,10 @@ def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=
             all_items.extend(items)
         except Exception:
             continue
+
+        # Rate limit 방지: 5개마다 1초 대기
+        if (idx + 1) % 5 == 0:
+            _time.sleep(1)
 
     # 이슈성 점수 계산
     for item in all_items:
