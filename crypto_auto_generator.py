@@ -110,13 +110,9 @@ TESLA_KEYWORDS = [
 ]
 
 # ─────────────────────────────────────────────
-#  Nitter 인스턴스 (X 피드 프록시)
+#  X(트위터) Syndication API (Nitter 대체)
 # ─────────────────────────────────────────────
-NITTER_INSTANCES = [
-    "https://xcancel.com",
-    "https://nitter.poast.org",
-    "https://nitter.privacydev.net",
-]
+X_SYNDICATION_URL = "https://syndication.twitter.com/srv/timeline-profile/screen-name/{handle}"
 
 # ─────────────────────────────────────────────
 #  X 인플루언서 계정 (Nitter RSS로 수집)
@@ -1307,46 +1303,77 @@ def summarize_text(text: str, translator=None, max_sentences: int = 5) -> str:
 
 
 def fetch_x_influencer(display_name: str, handle: str, count: int = 5):
-    """X 인플루언서 피드를 Nitter RSS로 수집"""
+    """X 인플루언서 피드를 Twitter Syndication API로 수집"""
     results = []
-    for base_url in NITTER_INSTANCES:
-        try:
-            feed_url = f"{base_url}/{handle}/rss"
-            feed = feedparser.parse(feed_url)
-            if not feed.entries:
+    try:
+        url = X_SYNDICATION_URL.format(handle=handle)
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}, timeout=15)
+        if resp.status_code != 200:
+            return results
+
+        # __NEXT_DATA__ JSON 추출
+        import re as _re, json as _json
+        match = _re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', resp.text)
+        if not match:
+            return results
+
+        data = _json.loads(match.group(1))
+        entries = data.get("props", {}).get("pageProps", {}).get("timeline", {}).get("entries", [])
+
+        tweet_count = 0
+        for entry in entries:
+            if tweet_count >= count:
+                break
+            if entry.get("type") != "tweet":
                 continue
-            for entry in feed.entries[:count]:
-                text_en = clean_text(entry.get("title", "") or entry.get("description", ""))
-                if not text_en or len(text_en) < 10:
-                    continue
 
-                if text_en.startswith("RT @") or text_en.startswith("RT:"):
-                    continue
+            tweet = entry.get("content", {}).get("tweet", {})
+            text_en = clean_text(tweet.get("text", ""))
+            if not text_en or len(text_en) < 10:
+                continue
 
-                published = entry.get("published", "")
-                link = entry.get("link", f"https://x.com/{handle}")
-                image_url = extract_image_from_rss(entry)
-                video_url = extract_video_from_rss(entry)
+            # RT 필터링
+            if text_en.startswith("RT @") or text_en.startswith("RT:"):
+                continue
 
-                # 제목 1차 번역 (미리보기용)
-                title_ko = quick_translate_title(text_en[:200])
+            created_at = tweet.get("created_at", "")
+            tweet_id = tweet.get("id_str", "")
+            user_handle = tweet.get("user", {}).get("screen_name", handle)
+            link = f"https://x.com/{user_handle}/status/{tweet_id}" if tweet_id else f"https://x.com/{handle}"
 
-                results.append({
-                    "title_en": text_en[:200],
-                    "title_ko": title_ko,
-                    "summary_en": text_en,
-                    "summary_ko": "",
-                    "full_text": text_en,
-                    "published": published,
-                    "link": link,
-                    "source": f"🐦 {display_name}",
-                    "video_url": video_url,
-                    "image_url": image_url,
-                    "is_korean": False,
-                })
-            break
-        except Exception:
-            continue
+            # 이미지/비디오 추출
+            image_url = ""
+            video_url = ""
+            media_list = tweet.get("mediaDetails", [])
+            for m in media_list:
+                if m.get("type") == "photo" and not image_url:
+                    image_url = m.get("media_url_https", "")
+                elif m.get("type") == "video" and not video_url:
+                    variants = m.get("video_info", {}).get("variants", [])
+                    mp4s = [v for v in variants if v.get("content_type") == "video/mp4"]
+                    if mp4s:
+                        video_url = max(mp4s, key=lambda v: v.get("bitrate", 0)).get("url", "")
+
+            # 제목 1차 번역 (미리보기용)
+            title_ko = quick_translate_title(text_en[:200])
+
+            results.append({
+                "title_en": text_en[:200],
+                "title_ko": title_ko,
+                "summary_en": text_en,
+                "summary_ko": "",
+                "full_text": text_en,
+                "published": created_at,
+                "link": link,
+                "source": f"🐦 {display_name}",
+                "video_url": video_url,
+                "image_url": image_url,
+                "is_korean": False,
+            })
+            tweet_count += 1
+
+    except Exception:
+        pass
     return results
 
 
