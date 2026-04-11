@@ -1,18 +1,14 @@
 """
-🪙 크립토 자동 기사 생성기 v2.0
+🪙 크립토 자동 기사 생성기 v1.0
 ═══════════════════════════════════════
-Claude AI가 영어 기사를 직접 읽고
-X 포스트(단일/스레드)를 한국어로 완성합니다.
-
-Google Translate 제거 → Claude API 연동
-뉴스 수집 → 기사 선택 → Claude가 완성 포스트 생성
+CryptoYuna 스타일로 크립토 뉴스를 자동 생성하고
+텍스트 + 이미지를 바로 올릴 수 있는 형태로 제공합니다.
 
 사용법: streamlit run crypto_auto_generator.py
 """
 
 import streamlit as st
 import feedparser
-import anthropic
 from deep_translator import GoogleTranslator
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -28,7 +24,6 @@ import tempfile
 import os
 import hashlib
 import shutil
-import subprocess
 from pathlib import Path
 
 # ─────────────────────────────────────────────
@@ -38,9 +33,8 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-# 출력 폴더 (클라우드: 임시 폴더 / 로컬: 현재 폴더)
-_IS_CLOUD = os.environ.get("STREAMLIT_SHARING_MODE") or not os.path.isdir(os.path.dirname(os.path.abspath(__file__)) + "/생성된_기사/../")
-DEFAULT_OUTPUT_DIR = tempfile.mkdtemp(prefix="crypto_") if _IS_CLOUD else os.path.join(os.path.dirname(os.path.abspath(__file__)), "생성된_기사")
+# 출력 폴더 (기본값 — UI에서 변경 가능)
+DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "생성된_기사")
 
 # ─────────────────────────────────────────────
 #  RSS 피드 목록
@@ -131,67 +125,54 @@ X_INFLUENCERS = {
     "🐋 Lookonchain":       "lookonchain",
 }
 
-# ── CryptoYuna 스타일 이모지 매핑 (2026.04.10 실제 계정 분석 반영) ──
-# 실제 CryptoYuna는 8가지 핵심 이모지만 사용: 🚨📌🔥💥🇺🇸🐋📊⚠️
-# 우선순위: 긴급 > 지정학 > 고래 > 온체인 > 강세 > 인물발언 > 분석 > 경고
-
-EMOJI_PRIORITY = [
-    # (우선순위, 이모지, 키워드 리스트)
-    (1, "🚨", ["breaking", "urgent", "just in", "hack", "exploit", "lawsuit",
-               "liquidat", "short squeeze", "flash", "emergency",
-               "속보", "긴급", "해킹", "청산",
-               "long position", "short position", "롱 포지션", "숏 포지션",
-               "bofa", "rate cut", "rate hike", "금리"]),
-    (3, "🐋", ["whale", "transfer", "고래", "대량 이체", "대형 거래"]),
-    (4, "💥", ["on-chain", "onchain", "outflow", "inflow", "withdrawal",
-               "exchange flow", "출금", "유입", "유출", "온체인", "tvl"]),
-    (5, "🔥", ["surge", "rally", "pump", "soar", "bull", "moon",
-               "record", "ath", "all-time", "breakout", "buy",
-               "급등", "강세", "돌파", "최고가", "매수", "launch"]),
-    (6, "📌", ["says", "said", "ceo", "founder", "chairman",
-               "saylor", "cz", "changpeng", "elon", "cathie",
-               "larry fink", "blackrock", "발언", "주장",
-               "\u201c", "인터뷰"]),
-    (7, "📊", ["etf", "chart", "data", "analysis", "report",
-               "prediction", "forecast", "분석", "리포트",
-               "dominance", "도미넌스"]),
-    (8, "⚠️", ["warn", "risk", "crash", "drop", "bear", "concern",
-               "danger", "scam", "fraud", "경고", "하락", "리스크", "주의"]),
-]
-
-# 지정학/국가별 이모지 (우선순위 2)
-EMOJI_GEO = {
-    "🇺🇸": ["trump", "vance", "us ", "america", "sec ", "fed ", "congress",
-             "white house", "powell", "트럼프", "밴스", "미국", "연준"],
-    "🇨🇳": ["china", "chinese", "beijing", "중국"],
-    "🇯🇵": ["japan", "boj", "yen", "일본"],
-    "🇰🇷": ["korea", "한국", "코스피"],
-    "🇪🇺": ["eu ", "europe", "ecb", "유럽"],
-    "🇮🇷": ["iran", "이란"],
-    "🇸🇻": ["el salvador", "bukele"],
-    "🇷🇺": ["russia", "러시아"],
-    "🇮🇳": ["india", "인도"],
-    "🇬🇧": ["uk ", "britain", "영국"],
-    "🇧🇷": ["brazil", "브라질"],
-    "🇨🇭": ["swiss", "switzerland"],
-}
-
-# 기존 호환용 (일부 코드에서 직접 참조하는 경우)
+# ── CryptoYuna 스타일 이모지 매핑 ──
 EMOJI_CATEGORIES = {
+    # 긴급/속보
     "breaking": "🚨", "urgent": "🚨", "hack": "🚨", "exploit": "🚨",
     "just in": "🚨",
-    "warn": "⚠️", "risk": "⚠️", "crash": "⚠️", "drop": "⚠️", "bear": "⚠️",
+    # 경고
+    "warn": "⚠️", "risk": "⚠️", "crash": "⚠️", "drop": "⚠️",
+    "bear": "⚠️", "concern": "⚠️",
+    # 핫/강세
     "surge": "🔥", "rally": "🔥", "pump": "🔥", "soar": "🔥",
-    "bull": "🔥", "record": "🔥", "ath": "🔥", "breakout": "🔥",
-    "trump": "🇺🇸", "us ": "🇺🇸", "sec ": "🇺🇸", "fed ": "🇺🇸",
-    "china": "🇨🇳", "japan": "🇯🇵", "korea": "🇰🇷",
-    "eu ": "🇪🇺", "iran": "🇮🇷",
-    "saylor": "📌", "cz": "📌", "cathie": "📌", "elon": "📌",
-    "ceo": "📌", "says": "📌", "said": "📌",
+    "bull": "🔥", "moon": "🔥", "record": "🔥", "ath": "🔥",
+    "all-time": "🔥", "breakout": "🔥", "launch": "🔥",
+    # 국가
+    "trump": "🇺🇸", "us ": "🇺🇸", "america": "🇺🇸", "sec ": "🇺🇸",
+    "fed ": "🇺🇸", "congress": "🇺🇸", "white house": "🇺🇸",
+    "china": "🇨🇳", "chinese": "🇨🇳", "beijing": "🇨🇳",
+    "japan": "🇯🇵", "boj": "🇯🇵", "yen": "🇯🇵",
+    "korea": "🇰🇷", "한국": "🇰🇷",
+    "eu ": "🇪🇺", "europe": "🇪🇺", "ecb": "🇪🇺",
+    "el salvador": "🇸🇻", "bukele": "🇸🇻",
+    "iran": "🇮🇷", "swiss": "🇨🇭", "switzerland": "🇨🇭",
+    "russia": "🇷🇺", "india": "🇮🇳", "brazil": "🇧🇷",
+    "uk ": "🇬🇧", "britain": "🇬🇧",
+    # 기업/인물
+    "saylor": "👨‍💼", "michael saylor": "👨‍💼",
+    "cathie wood": "👩‍💼", "ark invest": "👩‍💼",
+    "cz": "😎", "changpeng": "😎",
+    "powell": "🏦", "fed chair": "🏦",
+    "elon musk": "🚗", "musk": "🚗", "tesla": "🚗", "doge": "🐕",
+    "arthur hayes": "🧠",
+    "goldman": "🏦", "blackrock": "🏦", "jpmorgan": "🏦",
+    # 토큰
+    "bitcoin": "₿", "btc": "₿",
+    "ethereum": "◆", "eth ": "◆",
+    "stablecoin": "💵", "usdc": "🔵", "usdt": "💵",
+    "solana": "🟣", "sol ": "🟣",
+    "xrp": "💧",
+    # 유형
     "etf": "📊", "chart": "📊", "data": "📊",
     "whale": "🐋", "transfer": "🐋",
-    "onchain": "💥", "outflow": "💥", "inflow": "💥",
-    "war": "🇺🇸", "military": "🇺🇸",
+    "regulation": "📜", "bill": "📜", "law": "📜", "tax": "📜",
+    "payment": "💳", "visa": "💳", "mastercard": "💳",
+    "mining": "⛏️", "miner": "⛏️",
+    "war": "⚔️", "military": "⚔️", "missile": "⚔️",
+    "ai ": "🤖", "ai agent": "🤖", "artificial": "🤖",
+    "defi": "🔗", "nft": "🎨",
+    "partnership": "🤝", "partner": "🤝", "collaborat": "🤝",
+    "ipo": "📈", "listing": "📈",
 }
 
 # ── 이슈성 점수 키워드 ──
@@ -305,34 +286,11 @@ def format_pub_date(date_str: str) -> str:
 
 
 def get_category_emoji(title: str, summary: str = "") -> str:
-    """CryptoYuna 스타일 이모지 매칭 (우선순위 기반)
-    실제 계정 분석: 🚨📌🔥💥🇺🇸🐋📊⚠️ 8종만 사용
-    """
     combined = (title + " " + summary).lower()
-
-    # 1순위: 긴급 → 🚨
-    for _, emoji, keywords in EMOJI_PRIORITY:
-        if emoji == "🚨":
-            for kw in keywords:
-                if kw in combined:
-                    return "🚨"
-            break
-
-    # 2순위: 지정학 → 국기
-    for flag_emoji, keywords in EMOJI_GEO.items():
-        for kw in keywords:
-            if kw in combined:
-                return flag_emoji
-
-    # 3~8순위: 나머지
-    for _, emoji, keywords in EMOJI_PRIORITY:
-        if emoji == "🚨":
-            continue  # 이미 체크함
-        for kw in keywords:
-            if kw in combined:
-                return emoji
-
-    return "🚨"
+    for keyword, emoji in EMOJI_CATEGORIES.items():
+        if keyword in combined:
+            return emoji
+    return "📢"
 
 
 def get_post_category(title: str, summary: str = "") -> str:
@@ -364,63 +322,8 @@ def clean_paragraph(text: str) -> str:
 
 
 def polish_korean(text: str) -> str:
-    """번역 후처리: 크립토 고유명사 오역 복원 + 정리
-
-    Google Translate가 자주 틀리는 크립토 용어를 원래 영문으로 복원한다.
-    예: "전략" → "Strategy", "마이크로전략" → "MicroStrategy"
-    """
     if not text:
         return text
-
-    # ── 크립토 고유명사 오역 복원 사전 ──
-    # Google Translate가 번역해버리는 고유명사들을 원래대로 되돌림
-    CRYPTO_FIX = {
-        # 기업명
-        "전략": "Strategy", "마이크로전략": "MicroStrategy",
-        "마이크로 전략": "MicroStrategy", "미세전략": "MicroStrategy",
-        "블랙록": "BlackRock", "그레이스케일": "Grayscale",
-        "그레이 스케일": "Grayscale", "코인베이스": "Coinbase",
-        "바이낸스": "Binance", "제미니": "Gemini",
-        "충실도": "Fidelity", "피델리티": "Fidelity",
-        "은하": "Galaxy", "갤럭시": "Galaxy",
-        "방주": "ARK", "아크": "ARK",
-        "원장": "Ledger", "하이퍼리퀴드": "Hyperliquid",
-        "하이퍼 리퀴드": "Hyperliquid",
-        "코어위브": "CoreWeave", "핵심 직조": "CoreWeave",
-        "보안화": "Securitize", "비트마인": "BitMine",
-        # 토큰/프로토콜
-        "솔라나": "Solana", "이더리움": "Ethereum",
-        "비트코인": "BTC", "도지코인": "Dogecoin",
-        "체인링크": "Chainlink", "유니스왑": "Uniswap",
-        # 크립토 용어
-        "스테이블코인": "스테이블코인",  # 이건 한국어 OK
-        "아침 분": "Morning Minute", "오전 순간": "Morning Minute",
-        "아침 순간": "Morning Minute", "모닝 미닛": "Morning Minute",
-        # 정책/법안
-        "명확성 법": "Clarity Act", "명확법": "Clarity Act",
-        "선명도 법": "Clarity Act", "투명성법": "Clarity Act",
-        "명확성법": "Clarity Act",
-        # 금융 용어 오역 복원
-        "입찰": "매수 압력(Bid)", "입찰이": "매수 압력(Bid)이",
-        "청산": "청산(Liquidation)", "짧은 압착": "숏 스퀴즈(Short Squeeze)",
-        "짧은 짜기": "숏 스퀴즈(Short Squeeze)",
-        "강세": "강세(Bullish)", "약세": "약세(Bearish)",
-        "반감기": "반감기(Halving)", "반으로 줄이기": "반감기(Halving)",
-        # 인물명 오역
-        "세일러": "세일러(Saylor)",
-        "겐슬러": "겐슬러(Gensler)", "게리": "게리(Gary)",
-        "래리 핑크": "래리 핑크(Larry Fink)",
-        "캐시 우드": "캐시 우드(Cathie Wood)",
-        # ETF / 금융 상품
-        "현물": "현물(Spot)", "선물": "선물(Futures)",
-        # 프로젝트/컬럼명 오역 방지
-        "전략의": "Strategy의", "전략이": "Strategy가",
-    }
-
-    for wrong, correct in CRYPTO_FIX.items():
-        if wrong in text:
-            text = text.replace(wrong, correct)
-
     text = re.sub(r'\s+', ' ', text).strip()
     text = re.sub(r'\b(the|a|an|of the)\b', '', text, flags=re.IGNORECASE).strip()
     text = re.sub(r'\s{2,}', ' ', text)
@@ -448,119 +351,6 @@ def cut_at_sentence(text: str, max_len: int = 200) -> str:
         if text[i] in '은는이가을를에서도로의와':
             return text[:i + 1]
     return text[:max_len]
-
-
-# ═══════════════════════════════════════
-#  Claude API — 포스트 생성 엔진
-# ═══════════════════════════════════════
-
-CLAUDE_SYSTEM_PROMPT = """당신은 한국어 X(트위터) 크립토 전문 계정 운영자입니다.
-아래 규칙을 **반드시** 지켜서 X 포스트를 작성하세요.
-
-── 포스트 스타일 규칙 ──
-1. 이모지: 🚨📌🔥💥🇺🇸🐋📊⚠️ 중에서 **1개만** 첫 줄 앞에 사용
-2. 불릿: • (가운뎃점) 사용. - 사용 금지
-3. 인물 발언이면: `인물명(직함) : "발언 요약"` 형태로 첫 줄 구성
-4. 해시태그 사용 금지
-5. 외부 링크 본문에 넣지 않음
-6. 출처: 마지막 줄에 [출처 : 매체명]
-7. 영어 고유명사(기업명, 프로젝트명, 인물명, 티커)는 영문 그대로 표기 (번역 금지)
-   예: Strategy, MicroStrategy, STRC, BlackRock, Coinbase, Morning Minute
-8. 한국어는 자연스럽고 간결하게. 번역투 금지.
-
-── 포스트 구조 ──
-• 첫 줄(훅): 숫자, 질문, 또는 반전으로 시선 끌기
-• 중간(불릿 3~5개): 핵심 팩트 + 수치 + 이유/맥락
-• 마지막: 의견 한 줄 또는 질문형 CTA ("어떻게 보시나요?", "북마크 추천")
-
-── 포스트 유형 ──
-사용자가 지정한 유형에 맞춰 작성:
-• "single" → 단일 포스트 (280자 한국어 기준 적당히)
-• "thread" → 스레드 (3~7개 연결 포스트). 각 포스트를 [1/N] 형태로 번호 매기기.
-  첫 번째는 훅, 마지막은 CTA.
-• "analysis" → 데이터/차트 분석형. 수치 강조, 본인 해석 추가.
-• "opinion" → 뉴스 + 개인 의견. "제 생각에는..." 톤.
-
-── 금지 사항 ──
-• 단순 가격 펌핑 표현 ("to the moon!", "100x!!")
-• 이모지 도배 (1개만)
-• 기사를 그대로 번역하지 말 것. 핵심만 추려서 재구성할 것.
-"""
-
-
-def generate_post_with_claude(
-    api_key: str,
-    title_en: str,
-    article_text: str,
-    source_name: str,
-    post_type: str = "single",
-    extra_instruction: str = "",
-    model: str = "claude-sonnet-4-20250514",
-) -> str:
-    """Claude API로 영어 기사를 읽고 한국어 X 포스트를 생성"""
-
-    client = anthropic.Anthropic(api_key=api_key)
-
-    user_prompt = f"""아래 영어 기사를 읽고 한국어 X 포스트를 작성해주세요.
-
-── 기사 정보 ──
-제목: {title_en}
-출처: {source_name}
-
-── 기사 본문 ──
-{article_text[:4000]}
-
-── 요청 ──
-포스트 유형: {post_type}
-{f'추가 지시: {extra_instruction}' if extra_instruction else ''}
-
-위 기사를 바탕으로 X 포스트를 작성하세요. 포스트 텍스트만 출력하세요 (설명 없이)."""
-
-    message = client.messages.create(
-        model=model,
-        max_tokens=2000,
-        system=CLAUDE_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
-
-    return message.content[0].text.strip()
-
-
-def generate_thread_with_claude(
-    api_key: str,
-    articles: list,
-    thread_topic: str = "",
-    model: str = "claude-sonnet-4-20250514",
-) -> str:
-    """여러 기사를 묶어서 스레드로 생성"""
-
-    client = anthropic.Anthropic(api_key=api_key)
-
-    articles_text = ""
-    for i, art in enumerate(articles, 1):
-        articles_text += f"\n── 기사 {i} ──\n제목: {art['title_en']}\n출처: {art.get('source', '?')}\n본문: {art.get('full_text', art.get('summary_en', ''))[:2000]}\n"
-
-    user_prompt = f"""아래 여러 기사를 종합해서 X 스레드(Thread)를 작성해주세요.
-
-{articles_text}
-
-── 요청 ──
-{f'스레드 주제/각도: {thread_topic}' if thread_topic else '위 기사들의 공통 주제로 스레드를 구성해주세요.'}
-스레드는 [1/N] ~ [N/N] 형태로 3~7개 포스트로 구성하세요.
-첫 번째 포스트는 강력한 훅(숫자/질문/반전).
-마지막 포스트는 CTA (질문 또는 북마크 유도).
-각 포스트 사이에 빈 줄 2개로 구분하세요.
-
-포스트 텍스트만 출력하세요 (설명 없이)."""
-
-    message = client.messages.create(
-        model=model,
-        max_tokens=3000,
-        system=CLAUDE_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
-
-    return message.content[0].text.strip()
 
 
 # ═══════════════════════════════════════
@@ -722,123 +512,6 @@ def scrape_article_text(url: str) -> str:
         return ""
 
 
-# ═══════════════════════════════════════
-#  동영상 URL 추출 + 다운로드
-# ═══════════════════════════════════════
-
-def extract_video_from_page(url: str) -> str:
-    """기사 페이지에서 동영상 URL 추출 (YouTube, Twitter, 직접 mp4)"""
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=8)
-        resp.raise_for_status()
-        page_html = resp.text
-        soup = BeautifulSoup(page_html, "html.parser")
-
-        # 1) YouTube embed/iframe
-        for iframe in soup.find_all("iframe"):
-            src = iframe.get("src", "")
-            if "youtube.com/embed" in src:
-                vid_id = re.search(r'embed/([a-zA-Z0-9_-]{11})', src)
-                if vid_id:
-                    return f"https://www.youtube.com/watch?v={vid_id.group(1)}"
-            if "youtu.be" in src or "youtube.com" in src:
-                return src.split("?")[0]
-
-        # 2) YouTube 링크 in text
-        yt_match = re.search(
-            r'(https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)[a-zA-Z0-9_-]{11})',
-            page_html
-        )
-        if yt_match:
-            return yt_match.group(1)
-
-        # 3) Twitter/X 동영상 embed
-        for blockquote in soup.find_all("blockquote", class_="twitter-tweet"):
-            a_tag = blockquote.find("a", href=re.compile(r'twitter\.com|x\.com'))
-            if a_tag:
-                return a_tag["href"]
-
-        # 4) og:video meta tag
-        og_video = soup.find("meta", property="og:video")
-        if og_video and og_video.get("content"):
-            return og_video["content"]
-        og_video_url = soup.find("meta", property="og:video:url")
-        if og_video_url and og_video_url.get("content"):
-            return og_video_url["content"]
-
-        # 5) 직접 mp4 링크
-        mp4_match = re.search(r'(https?://[^\s"\'<>]+\.mp4)', page_html)
-        if mp4_match:
-            return mp4_match.group(1)
-
-        # 6) <video> 태그의 src
-        video_tag = soup.find("video")
-        if video_tag:
-            src = video_tag.get("src") or ""
-            if src:
-                return src
-            source_tag = video_tag.find("source")
-            if source_tag and source_tag.get("src"):
-                return source_tag["src"]
-
-    except Exception:
-        pass
-    return ""
-
-
-def extract_video_from_rss(entry) -> str:
-    """RSS 엔트리에서 동영상 URL 직접 추출"""
-    # media:content 에서 video 타입
-    for media in entry.get("media_content", []):
-        mtype = media.get("type", "")
-        url = media.get("url", "")
-        if "video" in mtype and url:
-            return url
-    # enclosure 에서 video 타입
-    for enc in entry.get("enclosures", []):
-        if "video" in enc.get("type", ""):
-            return enc.get("href", "")
-    return ""
-
-
-def download_video_ytdlp(video_url: str, save_dir: str, filename: str = "video") -> str:
-    """yt-dlp로 동영상 다운로드 (YouTube, X/Twitter, mp4 등 지원)"""
-    try:
-        out_path = os.path.join(save_dir, f"{filename}.%(ext)s")
-        cmd = [
-            "yt-dlp",
-            "--no-playlist",
-            "-f", "best[ext=mp4]/best",
-            "-o", out_path,
-            "--no-warnings",
-            "--quiet",
-            video_url,
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if result.returncode == 0:
-            # 실제 저장된 파일 찾기
-            for f in os.listdir(save_dir):
-                if f.startswith(filename) and not f.endswith(".part"):
-                    return os.path.join(save_dir, f)
-    except FileNotFoundError:
-        pass  # yt-dlp 미설치
-    except Exception:
-        pass
-    return ""
-
-
-def quick_translate_title(title_en: str, is_korean: bool = False) -> str:
-    """제목만 빠르게 한글 번역 (미리보기용, Google Translate)"""
-    if is_korean or not title_en:
-        return title_en
-    try:
-        translator = GoogleTranslator(source="en", target="ko")
-        result = translator.translate(title_en[:200])
-        return polish_korean(result) if result else title_en
-    except Exception:
-        return title_en
-
-
 # ── 핵심 문장 선별용 가중치 키워드 ──
 # 이유/근거/수치를 담고 있을 가능성이 높은 단어들
 REASON_KEYWORDS = [
@@ -945,7 +618,7 @@ def _is_off_topic_en(sentence: str, reference: str) -> bool:
     return False
 
 
-def summarize_text(text: str, translator=None, max_sentences: int = 5) -> str:
+def summarize_text(text: str, translator: GoogleTranslator, max_sentences: int = 5) -> str:
     """
     기사 본문에서 핵심 문장을 선별하여 번역
     — 단순 첫 3문장이 아닌, 이유/근거/수치가 담긴 고가치 문장 우선 선택
@@ -1018,6 +691,7 @@ def summarize_text(text: str, translator=None, max_sentences: int = 5) -> str:
 
 def fetch_x_influencer(display_name: str, handle: str, count: int = 5):
     """X 인플루언서 피드를 Nitter RSS로 수집"""
+    translator = GoogleTranslator(source="auto", target="ko")
     results = []
     for base_url in NITTER_INSTANCES:
         try:
@@ -1030,31 +704,34 @@ def fetch_x_influencer(display_name: str, handle: str, count: int = 5):
                 if not text_en or len(text_en) < 10:
                     continue
 
+                # RT(리트윗)은 건너뛰기
                 if text_en.startswith("RT @") or text_en.startswith("RT:"):
                     continue
 
+                try:
+                    text_ko = translator.translate(text_en[:500])
+                    text_ko = polish_korean(text_ko) if text_ko else text_en
+                except Exception:
+                    text_ko = text_en
+
                 published = entry.get("published", "")
                 link = entry.get("link", f"https://x.com/{handle}")
-                image_url = extract_image_from_rss(entry)
-                video_url = extract_video_from_rss(entry)
 
-                # 제목 1차 번역 (미리보기용)
-                title_ko = quick_translate_title(text_en[:200])
+                # 이미지 추출 시도
+                image_url = extract_image_from_rss(entry)
 
                 results.append({
                     "title_en": text_en[:200],
-                    "title_ko": title_ko,
+                    "title_ko": text_ko[:200] if text_ko else text_en[:200],
                     "summary_en": text_en,
-                    "summary_ko": "",
-                    "full_text": text_en,
+                    "summary_ko": text_ko or text_en,
                     "published": published,
                     "link": link,
                     "source": f"🐦 {display_name}",
-                    "video_url": video_url,
+                    "video_url": "",
                     "image_url": image_url,
-                    "is_korean": False,
                 })
-            break
+            break  # 성공한 Nitter 인스턴스에서 가져왔으면 다음으로
         except Exception:
             continue
     return results
@@ -1082,6 +759,7 @@ def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=
             continue
 
         is_korean = feed_name in KOREAN_FEEDS
+        translator = GoogleTranslator(source="en", target="ko") if not is_korean else None
 
         try:
             feed = feedparser.parse(feed_url)
@@ -1094,19 +772,22 @@ def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=
                 if not image_url and link and link != "#":
                     image_url = scrape_og_image(link)
 
-                # 기사 본문 확보
                 if len(rss_summary) < 200:
                     full_text = scrape_article_text(link)
                 else:
                     full_text = rss_summary
 
-                # 동영상 URL 추출
-                video_url = extract_video_from_rss(entry)
-                if not video_url and link and link != "#":
-                    video_url = extract_video_from_page(link)
-
-                # 제목 1차 번역 (미리보기용)
-                title_ko = quick_translate_title(title_en, is_korean)
+                if is_korean:
+                    title_ko = title_en
+                    raw_text = full_text if full_text else rss_summary
+                    summary_ko = cut_at_sentence(raw_text, 1000) if raw_text else ""
+                else:
+                    try:
+                        title_ko = translator.translate(title_en)
+                        title_ko = polish_korean(title_ko)
+                    except Exception:
+                        title_ko = title_en
+                    summary_ko = summarize_text(full_text if full_text else rss_summary, translator, max_sentences=10)
 
                 published = entry.get("published", "")
 
@@ -1114,14 +795,12 @@ def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=
                     "title_en": title_en,
                     "title_ko": title_ko,
                     "summary_en": rss_summary,
-                    "summary_ko": "",
-                    "full_text": full_text or rss_summary,
+                    "summary_ko": summary_ko,
                     "published": published,
                     "link": link,
                     "source": feed_name,
                     "image_url": image_url,
-                    "video_url": video_url,
-                    "is_korean": is_korean,
+                    "video_url": "",
                 })
         except Exception as e:
             continue
@@ -1452,12 +1131,11 @@ QUOTE_MARKERS = ["says", "said", "argues", "believes", "predicts", "warns",
 
 def detect_post_type(title_en: str, summary_en: str) -> str:
     """포스트 유형 자동 감지: 'quote' / 'breaking' / 'news'"""
-    title_lower = title_en.lower()
     combined = (title_en + " " + summary_en).lower()
 
-    # 인물 발언 감지 — 제목에서만 인물을 찾는다 (본문 인물 오귀속 방지)
-    has_person = any(k in title_lower for k in PERSON_KEYWORDS if k not in QUOTE_MARKERS)
-    has_quote_verb = any(q in title_lower for q in QUOTE_MARKERS)
+    # 인물 발언 감지
+    has_person = any(k in combined for k in PERSON_KEYWORDS if k not in QUOTE_MARKERS)
+    has_quote_verb = any(q in combined for q in QUOTE_MARKERS)
     has_quotation = '"' in title_en or '"' in title_en or ':' in title_en
     if has_person and (has_quote_verb or has_quotation):
         return "quote"
@@ -1472,13 +1150,11 @@ def detect_post_type(title_en: str, summary_en: str) -> str:
 
 
 def find_person_name(title_en: str, summary_en: str) -> str:
-    """제목에서 인물명 추출 (본문 인물 오귀속 방지 — 제목 우선)"""
-    title_lower = title_en.lower()
-    # 1차: 제목에서만 찾기
+    """제목/요약에서 인물명 추출"""
+    combined = (title_en + " " + summary_en).lower()
     for keyword, display_name in PERSON_KEYWORDS.items():
-        if keyword in title_lower and display_name:
+        if keyword in combined and display_name:
             return display_name
-    # 2차: 제목에 인물이 없으면 빈 문자열 (본문 인물을 헤드라인 화자로 잘못 쓰지 않음)
     return ""
 
 
@@ -1573,14 +1249,7 @@ def extract_clean_bullets(summary: str, title: str = "", max_count: int = 4) -> 
 def generate_yuna_style_post(item: dict) -> dict:
     """
     CryptoYuna 스타일 포스트 자동 생성
-    2026.04.10 실제 @CryptoYuna_ 계정 분석 반영
-
-    핵심 변경:
-    - 불릿은 • 사용 (- 아님, 실제 CryptoYuna 패턴)
-    - 인물 발언은 헤드라인에 인물명 : "발언" 형태
-    - 해시태그 사용 안 함 (실제 CryptoYuna는 해시태그 거의 안 씀)
-    - 출처 표기: [출처 : OOO]
-    - 글자 잘림 방지: 문장 단위로 온전하게 유지
+    실제 16개+ 게시물 분석 기반 — 3가지 유형 자동 감지
     """
 
     emoji = get_category_emoji(item["title_en"], item.get("summary_en", ""))
@@ -1589,71 +1258,110 @@ def generate_yuna_style_post(item: dict) -> dict:
     title = item["title_ko"].strip()
     summary = item.get("summary_ko", "")
     source = item.get("source", "")
-    source_clean = re.sub(r'^[^\s]*\s*', '', source).strip() if source else ""
+    source_clean = re.sub(r'^[^\s]*\s*', '', source).strip()
 
-    # 제목 끝 처리 (CryptoYuna: ! 또는 자연스러운 끝)
-    if not title.endswith(('!', '?', '.', '다', '요')):
+    # 제목 끝 처리 (CryptoYuna: 대부분 ! 또는 !! 로 끝남)
+    if not title.endswith(('!', '?', '.')):
         title += '!'
 
     sentences = extract_clean_bullets(summary, title, 8)
 
     # ════════════════════════════════════
     #  패턴B: 인물 발언 인용형
-    #  예: 📌 CZ : "암호화폐, 5년 뒤 인터넷처럼 일상화될 것"
     # ════════════════════════════════════
     if post_type == "quote":
         person = find_person_name(item["title_en"], item.get("summary_en", ""))
         lines = []
 
-        # 헤드라인: 인물명 : "제목"
         if person:
-            # 제목에서 따옴표 안 내용 추출 시도
-            quote_match = re.search(r'["\u201c](.+?)["\u201d]', title)
-            if quote_match:
-                lines.append(f'{emoji} {person} : "{quote_match.group(1)}"')
-            else:
-                lines.append(f'{emoji} {person} : "{title}"')
+            lines.append(f"{emoji} {person} : \"{title}\"")
         else:
             lines.append(f"{emoji} {title}")
 
         lines.append("")
 
-        # 불릿 포인트로 핵심 정보 (• 사용, 따옴표 안 감쌈)
+        # 인용문 (따옴표 감싸기)
         for s in sentences[:4]:
-            lines.append(f"• {s}")
+            lines.append(f"\"{cut_at_sentence(s, 200)}\"")
+
+        if sentences and len(sentences) > 4:
+            lines.append("")
+            lines.append(cut_at_sentence(sentences[-1], 150))
 
         post_text = "\n".join(lines)
 
     # ════════════════════════════════════
     #  패턴C: 속보형
-    #  예: 🚨 트럼프 내부자, BTC+ETH 총 2.03억 달러 롱 포지션 오픈!
     # ════════════════════════════════════
     elif post_type == "breaking":
-        lines = [f"{emoji} {title}", ""]
+        lines = [f"{emoji} 속보 : {title}", ""]
 
-        for s in sentences[:5]:
-            lines.append(f"• {s}")
+        for s in sentences[:6]:
+            lines.append(f"• {cut_at_sentence(s, 150)}")
+
+        if sentences:
+            lines.append("")
+            if len(sentences) > 3:
+                closing = cut_at_sentence(sentences[-1], 150)
+                lines.append(closing)
+
+        if source_clean:
+            lines.append("")
+            lines.append(f"({source_clean})")
 
         post_text = "\n".join(lines)
 
     # ════════════════════════════════════
     #  패턴A: 뉴스 기사형 (기본, 가장 많음)
-    #  예: 💥 Binance 이더리움 출금량, 2025년 이후 최고치 폭발
-    #      • 핵심1
-    #      • 핵심2
+    #  ────────────────────────────────
+    #  구조:
+    #    🔥 제목!
+    #    (빈줄)
+    #    도입부 설명 1~2문장
+    #    (빈줄)
+    #    - 핵심1 (상세 설명 포함)
+    #    - 핵심2 (수치/근거 포함)
+    #    - 핵심3 (전망/분석 포함)
+    #    - 핵심4 (추가 맥락)
+    #    (빈줄)
+    #    전망/요약 마무리 !!
     # ════════════════════════════════════
     else:
         lines = [f"{emoji} {title}", ""]
 
-        # 전체 불릿으로 통일 (• 사용, 실제 CryptoYuna 패턴)
-        for s in sentences[:5]:
-            lines.append(f"• {s}")
+        # 도입부 설명 2문장까지 (제목 다음에 맥락 설명)
+        intro_sentences = []
+        bullet_sentences = []
+
+        for i, s in enumerate(sentences):
+            if i < 2:
+                intro_sentences.append(s)
+            else:
+                bullet_sentences.append(s)
+
+        if intro_sentences:
+            for s in intro_sentences:
+                lines.append(cut_at_sentence(s, 200))
+            lines.append("")
+
+        # 불릿 포인트 — 최대 5개, 각 150자까지 (상세 내용 포함)
+        for s in bullet_sentences[:5]:
+            s_trimmed = cut_at_sentence(s, 150)
+            lines.append(f"- {s_trimmed}")
+
+        # 마지막 전망/요약
+        if len(sentences) > 3:
+            lines.append("")
+            remaining = sentences[min(6, len(sentences) - 1):]
+            if remaining:
+                closing = cut_at_sentence(remaining[0], 150)
+                if closing and not closing.endswith(('!', '?', '.', '다', '요', '!!')):
+                    closing += ' !!'
+                elif closing and closing.endswith('.'):
+                    closing = closing[:-1] + ' !!'
+                lines.append(closing)
 
         post_text = "\n".join(lines)
-
-    # 출처 표기 (실제 CryptoYuna: [출처 : OOO] 형태)
-    if source_clean:
-        post_text += f"\n\n[출처 : {source_clean}]"
 
     # 빈 줄 연속 정리
     post_text = re.sub(r'\n{3,}', '\n\n', post_text).strip()
@@ -1725,94 +1433,23 @@ def save_post_package(post: dict, output_dir: str, index: int) -> dict:
 # ═══════════════════════════════════════
 
 st.set_page_config(
-    page_title="🪙 크립토 포스트 생성기",
+    page_title="🪙 크립토 자동 기사 생성기",
     page_icon="🪙",
     layout="wide",
-    initial_sidebar_state="collapsed",  # 모바일에서 사이드바 기본 접힘
 )
 
-# ── 모바일 최적화 CSS ──
+# ── 커스텀 CSS ──
 st.markdown("""
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
-    /* ── 전체 테마 ── */
+    /* 전체 테마 */
     .stApp { background-color: #0e1117; }
-
-    /* ── 모바일 반응형 ── */
-    @media (max-width: 768px) {
-        /* 사이드바 패딩 줄이기 */
-        .stSidebar .stSidebarContent { padding: 0.5rem !important; }
-
-        /* 메인 영역 패딩 줄이기 */
-        .stMainBlockContainer { padding: 0.5rem !important; }
-        section.main > div { padding: 0.5rem !important; }
-        .block-container { padding: 0.5rem 0.5rem !important; max-width: 100% !important; }
-
-        /* 버튼 터치 영역 키우기 */
-        .stButton > button {
-            min-height: 48px !important;
-            font-size: 16px !important;
-            padding: 12px 16px !important;
-            width: 100% !important;
-        }
-
-        /* expander 터치 영역 */
-        .streamlit-expanderHeader {
-            font-size: 14px !important;
-            padding: 12px 8px !important;
-            min-height: 48px !important;
-        }
-
-        /* 입력 필드 */
-        .stTextInput input, .stSelectbox select {
-            font-size: 16px !important;  /* iOS 줌 방지 */
-            min-height: 44px !important;
-        }
-
-        /* 컬럼 스택 */
-        [data-testid="column"] {
-            width: 100% !important;
-            flex: 100% !important;
-        }
-
-        /* X 미리보기 */
-        .x-preview {
-            max-width: 100% !important;
-            font-size: 14px !important;
-            padding: 12px !important;
-        }
-
-        /* 텍스트 영역 */
-        .stTextArea textarea {
-            font-size: 14px !important;
-        }
-
-        /* 코드 블록 복사용 */
-        .stCode {
-            font-size: 13px !important;
-        }
-
-        /* 헤더 크기 조정 */
-        h1 { font-size: 1.5rem !important; }
-        h2 { font-size: 1.2rem !important; }
-        h3 { font-size: 1.1rem !important; }
-
-        /* 슬라이더 터치 영역 */
-        .stSlider > div { padding: 8px 0 !important; }
-
-        /* 통계 카드 */
-        .stat-card { padding: 10px !important; }
-        .stat-number { font-size: 22px !important; }
-    }
-
-    /* ── 공통 스타일 ── */
 
     /* 포스트 카드 */
     .post-card {
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
         border-radius: 16px;
-        padding: 16px;
-        margin: 8px 0;
+        padding: 20px;
+        margin: 12px 0;
         border-left: 4px solid #e94560;
         color: #eee;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -1820,6 +1457,38 @@ st.markdown("""
     .post-card-hot {
         border-left: 4px solid #ff6b35;
         background: linear-gradient(135deg, #1a1a2e 0%, #2a1a3e 100%);
+        box-shadow: 0 0 20px rgba(233, 69, 96, 0.1);
+    }
+    .post-title {
+        font-size: 18px;
+        font-weight: bold;
+        color: #fff;
+        margin-bottom: 8px;
+    }
+    .post-content {
+        font-size: 14px;
+        line-height: 1.8;
+        color: #d0d0d0;
+        white-space: pre-wrap;
+    }
+    .score-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-weight: bold;
+        font-size: 13px;
+        margin-right: 8px;
+    }
+    .score-hot { background: #e94560; color: white; }
+    .score-mid { background: #ff8c00; color: white; }
+    .score-low { background: #4a90d9; color: white; }
+    .cat-badge {
+        display: inline-block;
+        background: rgba(255,255,255,0.1);
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        color: #aaa;
     }
 
     /* X 미리보기 */
@@ -1834,7 +1503,6 @@ st.markdown("""
         font-size: 15px;
         line-height: 1.6;
         white-space: pre-wrap;
-        word-break: keep-all;
     }
 
     /* 통계 카드 */
@@ -1847,69 +1515,24 @@ st.markdown("""
     }
     .stat-number { font-size: 28px; font-weight: bold; color: #e94560; }
     .stat-label { font-size: 13px; color: #888; margin-top: 4px; }
-
-    /* 미디어 태그 */
-    .media-tag {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: bold;
-        margin-left: 4px;
-    }
-    .media-video { background: #ff4444; color: white; }
-    .media-image { background: #4488ff; color: white; }
-
-    /* 복사 버튼 강조 */
-    .copy-hint {
-        background: #1a3a5c;
-        border: 1px dashed #4488ff;
-        border-radius: 8px;
-        padding: 8px 12px;
-        color: #88bbff;
-        font-size: 13px;
-        text-align: center;
-        margin: 8px 0;
-    }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ── 타이틀 ──
-st.title("🪙 크립토 X 포스트 생성기")
-st.caption("뉴스 수집 → 기사 선택 → Claude AI가 한국어 포스트 생성")
-
-# 모바일 힌트
-st.markdown('<p style="color:#666; font-size:12px;">💡 모바일: 좌측 상단 ☰ 아이콘으로 설정 열기</p>', unsafe_allow_html=True)
+st.title("🪙 크립토 자동 기사 생성기")
+st.caption("CryptoYuna 스타일 · RSS 뉴스 + X 인플루언서 자동 수집 → 기사 생성 → 텍스트+이미지 패키지 저장")
 
 # ── 사이드바 설정 ──
 with st.sidebar:
     st.header("⚙️ 설정")
 
-    st.markdown("### 🔑 Claude API")
-    # secrets > 환경변수 > 직접 입력 순으로 API 키 확인
-    _default_key = ""
-    try:
-        _default_key = st.secrets.get("ANTHROPIC_API_KEY", "")
-    except Exception:
-        pass
-    if not _default_key:
-        _default_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    claude_api_key = st.text_input(
-        "API Key",
-        type="password",
-        help="Anthropic Console에서 발급받은 API 키. Streamlit Cloud는 Secrets에 등록하면 자동 적용됩니다.",
-        value=_default_key,
+    st.markdown("### 📂 저장 위치")
+    output_dir = st.text_input(
+        "기사 저장 폴더",
+        value=DEFAULT_OUTPUT_DIR,
+        help="생성된 기사가 저장될 폴더 경로"
     )
-    claude_model = st.selectbox(
-        "모델",
-        ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001", "claude-opus-4-0-20250115"],
-        index=0,
-        help="Sonnet: 빠르고 저렴 / Haiku: 더 빠름 / Opus: 최고 품질"
-    )
-
-    st.markdown("---")
-    output_dir = DEFAULT_OUTPUT_DIR
 
     st.markdown("---")
     st.markdown("### 📰 뉴스 소스 선택")
@@ -2019,23 +1642,31 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(f"📰 RSS: **{len(selected_feeds)}**개 | 🐦 X: **{len(selected_influencers)}**개")
 
-    st.markdown("---")
-    st.caption("📱 Streamlit Cloud 배포 → 핸드폰 어디서나 접속 가능")
-
 
 # ── 메인 영역 ──
 
-# ════════════════════════════════════
-#  STEP 1: 뉴스 수집
-# ════════════════════════════════════
-st.markdown("## 📡 STEP 1: 뉴스 수집")
+# 생성 버튼
+col_btn1, col_btn2, col_btn3 = st.columns([2, 2, 6])
+with col_btn1:
+    generate_btn = st.button("🚀 기사 자동 생성", type="primary", use_container_width=True)
+with col_btn2:
+    if st.button("📂 저장 폴더 열기", use_container_width=True):
+        if os.path.exists(output_dir):
+            os.startfile(output_dir) if os.name == 'nt' else os.system(f'open "{output_dir}"')
+        else:
+            st.warning("폴더가 아직 없습니다. 먼저 기사를 생성하세요.")
 
-collect_btn = st.button("📡 뉴스 수집 시작", type="primary", use_container_width=True)
-
-if collect_btn:
+if generate_btn:
     if not selected_feeds and not selected_influencers:
-        st.error("최소 1개 이상의 뉴스 소스 또는 인플루언서를 선택하세요!")
+        st.error("❌ 최소 1개 이상의 뉴스 소스 또는 인플루언서를 선택하세요!")
     else:
+        # 저장 폴더 생성
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        batch_dir = os.path.join(output_dir, f"배치_{timestamp}")
+        os.makedirs(batch_dir, exist_ok=True)
+
+        # 1단계: 뉴스 수집
+        st.markdown("### 📡 1단계: 뉴스 수집")
         progress_bar = st.progress(0)
         status_text = st.empty()
 
@@ -2050,254 +1681,150 @@ if collect_btn:
         )
         rss_count = sum(1 for n in all_news if not n["source"].startswith("🐦"))
         x_count = sum(1 for n in all_news if n["source"].startswith("🐦"))
-        status_text.text(f"총 {len(all_news)}개 수집 (RSS: {rss_count} / X: {x_count})")
+        status_text.text(f"✅ 총 {len(all_news)}개 수집 (RSS: {rss_count} / X: {x_count})")
 
-        # 중복 제거 & 점수 필터
+        # 2단계: 중복 제거 & 필터
+        st.markdown("### 🔍 2단계: 뉴스 선별")
         filtered = [n for n in all_news if n["score"]["total"] >= min_score]
         unique_news = deduplicate_news(filtered)
         top_news = unique_news[:num_posts]
+        merged_count = sum(n.get("duplicate_count", 1) - 1 for n in unique_news)
+        st.success(f"✅ {len(all_news)}개 수집 → 중복 {merged_count}개 병합 → 고유 {len(unique_news)}개 → 상위 {len(top_news)}개 선정")
 
-        st.session_state["collected_news"] = top_news
-        st.session_state["generated_posts"] = {}
-        st.success(f"수집 완료! 상위 {len(top_news)}개 기사 준비됨")
-
-
-# ════════════════════════════════════
-#  STEP 2: 기사 선택 → Claude가 포스트 생성
-# ════════════════════════════════════
-if "collected_news" in st.session_state and st.session_state["collected_news"]:
-    news_list = st.session_state["collected_news"]
-
-    st.markdown("---")
-    st.markdown("## ✍️ STEP 2: 기사 선택 → Claude AI 포스트 생성")
-
-    if not claude_api_key:
-        st.warning("사이드바에서 Claude API 키를 입력해주세요.")
-    else:
-        # ── 스레드 모드: 여러 기사 묶기 ──
-        with st.expander("🧵 스레드 모드 (여러 기사 묶어서 스레드 생성)", expanded=False):
-            thread_selections = []
-            for i, news in enumerate(news_list):
-                score = news["score"]["total"]
-                pub_display = format_pub_date(news.get("published", ""))
-                title_kr = news.get("title_ko", news["title_en"])
-                checked = st.checkbox(
-                    f"[{score:.0f}점] {title_kr[:60]} — {news['source']}",
-                    key=f"thread_{i}"
-                )
-                if checked:
-                    thread_selections.append(i)
-
-            thread_topic = st.text_input("스레드 주제/각도 (선택사항)", placeholder="예: BTC $73K 돌파와 테슬라의 관계")
-
-            if st.button("🧵 스레드 생성", disabled=len(thread_selections) < 2):
-                if len(thread_selections) < 2:
-                    st.warning("스레드를 만들려면 2개 이상 기사를 선택하세요.")
-                else:
-                    selected_articles = [news_list[i] for i in thread_selections]
-                    with st.spinner("Claude가 스레드를 작성하고 있습니다..."):
-                        try:
-                            thread_text = generate_thread_with_claude(
-                                api_key=claude_api_key,
-                                articles=selected_articles,
-                                thread_topic=thread_topic,
-                                model=claude_model,
-                            )
-                            st.session_state["thread_result"] = thread_text
-                        except Exception as e:
-                            st.error(f"Claude API 오류: {e}")
-
-            if st.session_state.get("thread_result"):
-                st.markdown("### 🧵 생성된 스레드")
-                st.markdown(f"""<div class="x-preview">{st.session_state['thread_result']}</div>""", unsafe_allow_html=True)
-                st.code(st.session_state["thread_result"], language=None)
-
-                # 스레드 다운로드
-                st.download_button(
-                    label="💾 스레드 다운로드",
-                    data=st.session_state["thread_result"],
-                    file_name="스레드.txt",
-                    mime="text/plain",
-                    key="dl_thread",
-                )
-
-        st.markdown("---")
-
-        # ── 개별 기사 → 단일 포스트 생성 ──
-        st.markdown("### 📰 개별 기사 → 포스트 생성")
-
-        for i, news in enumerate(news_list):
-            score = news["score"]["total"]
-            emoji = get_category_emoji(news["title_en"], news.get("summary_en", ""))
-            category = get_post_category(news["title_en"], news.get("summary_en", ""))
-            pub_display = format_pub_date(news.get("published", ""))
-            score_color = "🔴" if score >= 50 else "🟠" if score >= 30 else "🔵"
-
-            # 한글 제목 표시 (1차 번역)
-            title_display = news.get("title_ko", news["title_en"])
-            has_video = bool(news.get("video_url"))
-            has_image = bool(news.get("image_url"))
-            media_tag = ""
-            if has_video:
-                media_tag = " 🎬"
-            elif has_image:
-                media_tag = " 🖼️"
-
-            with st.expander(
-                f"{score_color} [{score:.0f}점] {emoji} {title_display[:60]}{media_tag}  |  {news['source']}  |  {pub_display}",
-                expanded=(i < 3)
-            ):
-                # ── 기사 정보 ──
-                st.markdown(f"**🇰🇷 {title_display}**")
-                st.caption(f"🇺🇸 {news['title_en']}")
-                st.markdown(f"**출처:** {news['source']}  |  **카테고리:** {category}")
-                if news.get("link"):
-                    st.markdown(f"[원문 보기]({news['link']})")
-
-                # ── 미디어 (이미지 + 동영상) ──
-                if has_image:
-                    try:
-                        st.image(news["image_url"], use_container_width=True)
-                    except Exception:
-                        st.caption(f"이미지: {news['image_url'][:60]}...")
-
-                if has_video:
-                    video_url = news["video_url"]
-                    st.markdown(f"**🎬 동영상 발견!**")
-                    st.code(video_url, language=None)
-
-                    # YouTube 미리보기
-                    yt_match = re.search(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})', video_url)
-                    if yt_match:
-                        st.image(f"https://img.youtube.com/vi/{yt_match.group(1)}/hqdefault.jpg", use_container_width=True)
-
-                    # 다운로드 버튼
-                    if st.button(f"⬇️ 동영상 다운로드", key=f"dl_vid_{i}"):
-                        with st.spinner("동영상 다운로드 중... (yt-dlp)"):
-                            dl_dir = os.path.join(output_dir, "다운로드_영상")
-                            os.makedirs(dl_dir, exist_ok=True)
-                            safe_name = re.sub(r'[^\w]', '', news["title_en"])[:30]
-                            saved_path = download_video_ytdlp(video_url, dl_dir, safe_name)
-                            if saved_path:
-                                st.success(f"다운로드 완료: {saved_path}")
-                            else:
-                                st.warning("yt-dlp 미설치 또는 다운로드 실패.\n`pip install yt-dlp` 로 설치하세요.")
-
-                # ── 본문 미리보기 ──
-                full_text = news.get("full_text", news.get("summary_en", ""))
-                if full_text:
-                    preview = full_text[:500] + ("..." if len(full_text) > 500 else "")
-                    with st.expander("📄 기사 원문 (영어)", expanded=False):
-                        st.text(preview)
-
-                st.markdown("---")
-
-                # ── 포스트 생성 ──
-                post_type = st.selectbox(
-                    "포스트 유형",
-                    ["single", "analysis", "opinion"],
-                    format_func=lambda x: {"single": "📝 단일 포스트", "analysis": "📊 데이터 분석형", "opinion": "💬 뉴스 + 내 의견"}[x],
-                    key=f"type_{i}"
-                )
-                extra_note = st.text_input(
-                    "추가 지시 (선택)",
-                    placeholder="예: 테슬라와의 연관성 강조",
-                    key=f"extra_{i}"
-                )
-
-                if st.button(f"✨ Claude로 포스트 생성", key=f"gen_{i}", type="primary"):
-                    with st.spinner("Claude가 포스트를 작성 중..."):
-                        try:
-                            result = generate_post_with_claude(
-                                api_key=claude_api_key,
-                                title_en=news["title_en"],
-                                article_text=news.get("full_text", news.get("summary_en", "")),
-                                source_name=re.sub(r'^[^\s]*\s*', '', news["source"]).strip(),
-                                post_type=post_type,
-                                extra_instruction=extra_note,
-                                model=claude_model,
-                            )
-                            st.session_state["generated_posts"][i] = result
-                        except Exception as e:
-                            st.error(f"Claude API 오류: {e}")
-
-                # ── 생성된 포스트 표시 ──
-                if i in st.session_state.get("generated_posts", {}):
-                    post_text = st.session_state["generated_posts"][i]
-                    st.markdown("#### ✅ 생성된 포스트")
-                    st.markdown(f"""<div class="x-preview">{post_text}</div>""", unsafe_allow_html=True)
-                    st.code(post_text, language=None)
-
-                    # 다운로드 버튼 (클라우드 + 모바일 호환)
-                    download_content = post_text
-                    download_content += f"\n\n─────────────────\n"
-                    download_content += f"원문 제목: {news['title_en']}\n"
-                    download_content += f"출처: {news['source']}\n"
-                    download_content += f"원문: {news.get('link', '')}\n"
-                    if news.get("video_url"):
-                        download_content += f"동영상: {news['video_url']}\n"
-
-                    st.download_button(
-                        label="💾 포스트 텍스트 다운로드",
-                        data=download_content,
-                        file_name=f"포스트_{i+1}.txt",
-                        mime="text/plain",
-                        key=f"dl_{i}",
-                    )
-                    st.markdown('<div class="copy-hint">💡 포스트 텍스트를 길게 눌러 복사 → X 앱에 붙여넣기</div>', unsafe_allow_html=True)
-
-
-# ── 일괄 생성 모드 ──
-if "collected_news" in st.session_state and st.session_state["collected_news"] and claude_api_key:
-    st.markdown("---")
-    st.markdown("## 🚀 일괄 생성 모드")
-    st.caption("수집된 모든 기사를 한번에 Claude로 포스트 생성 (기존 v1 방식과 비슷하지만 Claude 품질)")
-
-    batch_type = st.selectbox(
-        "일괄 생성 포스트 유형",
-        ["single", "analysis", "opinion"],
-        format_func=lambda x: {"single": "📝 단일 포스트", "analysis": "📊 데이터 분석형", "opinion": "💬 뉴스 + 내 의견"}[x],
-        key="batch_type"
-    )
-
-    if st.button("🚀 전체 일괄 생성", type="primary"):
-        news_list = st.session_state["collected_news"]
-
+        # 3단계: 기사 생성
+        st.markdown("### ✍️ 3단계: CryptoYuna 스타일 기사 생성")
+        posts = []
         gen_progress = st.progress(0)
-        all_posts = []
 
-        for idx, news in enumerate(news_list):
-            gen_progress.progress((idx + 1) / len(news_list))
-            try:
-                post_text = generate_post_with_claude(
-                    api_key=claude_api_key,
-                    title_en=news["title_en"],
-                    article_text=news.get("full_text", news.get("summary_en", "")),
-                    source_name=re.sub(r'^[^\s]*\s*', '', news["source"]).strip(),
-                    post_type=batch_type,
-                    model=claude_model,
-                )
-                all_posts.append({"news": news, "text": post_text})
-            except Exception as e:
-                st.warning(f"[{idx+1}] 생성 실패: {e}")
-                continue
+        for i, news_item in enumerate(top_news):
+            gen_progress.progress((i + 1) / len(top_news))
+            post = generate_yuna_style_post(news_item)
+            posts.append(post)
 
         gen_progress.progress(1.0)
-        st.success(f"일괄 생성 완료! {len(all_posts)}개 포스트")
+        st.success(f"✅ {len(posts)}개 기사 생성 완료!")
 
-        # 전체 텍스트 미리보기 + 다운로드
-        if all_posts:
-            st.markdown("### 📋 전체 포스트 (복사용)")
-            separator = "\n\n" + "═" * 40 + "\n\n"
-            all_text = separator.join([
-                f"[{i+1}/{len(all_posts)}] {p['news']['source']}\n{'─' * 30}\n{p['text']}"
-                for i, p in enumerate(all_posts)
-            ])
-            st.text_area("전체 포스트", value=all_text, height=400, key="batch_all_text")
-            st.download_button(
-                label="💾 전체 포스트 다운로드",
-                data=all_text,
-                file_name=f"전체포스트_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-                mime="text/plain",
-                key="dl_batch_all",
-            )
+        # 4단계: 파일 저장
+        st.markdown("### 💾 4단계: 파일 저장")
+        save_progress = st.progress(0)
+        saved_results = []
+
+        for i, post in enumerate(posts):
+            save_progress.progress((i + 1) / len(posts))
+            result = save_post_package(post, batch_dir, i + 1)
+            saved_results.append(result)
+
+        save_progress.progress(1.0)
+
+        # 이미지 있는 기사 수 카운트
+        with_images = sum(1 for r in saved_results if r.get("image_file"))
+        st.success(f"✅ 저장 완료! (이미지 포함: {with_images}/{len(saved_results)}개)")
+
+        # 저장된 기사를 세션에 보관
+        st.session_state["posts"] = posts
+        st.session_state["saved_results"] = saved_results
+        st.session_state["batch_dir"] = batch_dir
+
+
+# ── 생성 결과 표시 ──
+if "posts" in st.session_state and st.session_state["posts"]:
+    posts = st.session_state["posts"]
+    saved_results = st.session_state.get("saved_results", [])
+    batch_dir = st.session_state.get("batch_dir", "")
+
+    st.markdown("---")
+    st.markdown(f"## 📋 생성된 기사 ({len(posts)}건)")
+
+    if batch_dir:
+        st.info(f"📂 저장 위치: `{batch_dir}`")
+
+    # 통계
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f"""<div class="stat-card">
+            <div class="stat-number">{len(posts)}</div>
+            <div class="stat-label">생성된 기사</div>
+        </div>""", unsafe_allow_html=True)
+    with col2:
+        with_img = sum(1 for r in saved_results if r.get("image_file"))
+        st.markdown(f"""<div class="stat-card">
+            <div class="stat-number">{with_img}</div>
+            <div class="stat-label">이미지 포함</div>
+        </div>""", unsafe_allow_html=True)
+    with col3:
+        avg_score = sum(p["score"] for p in posts) / len(posts) if posts else 0
+        st.markdown(f"""<div class="stat-card">
+            <div class="stat-number">{avg_score:.0f}</div>
+            <div class="stat-label">평균 점수</div>
+        </div>""", unsafe_allow_html=True)
+    with col4:
+        categories = Counter(p["category"] for p in posts)
+        top_cat = categories.most_common(1)[0][0] if categories else "-"
+        st.markdown(f"""<div class="stat-card">
+            <div class="stat-number" style="font-size:18px;">{top_cat}</div>
+            <div class="stat-label">최다 카테고리</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("")
+
+    # 기사 카드 표시
+    for i, (post, saved) in enumerate(zip(posts, saved_results)):
+        score = post["score"]
+        score_class = "score-hot" if score >= 50 else "score-mid" if score >= 30 else "score-low"
+        card_class = "post-card post-card-hot" if score >= 50 else "post-card"
+
+        pub_short = post.get("pub_display", "").split("(")[0].strip() if post.get("pub_display") else ""
+        time_tag = f"  |  🕐 {pub_short}" if pub_short else ""
+        with st.expander(f"{post['emoji']} {post['title'][:50]}  |  점수: {score:.0f}{time_tag}  |  {post['category']}", expanded=(i < 3)):
+
+            col_left, col_right = st.columns([3, 2])
+
+            with col_left:
+                st.markdown("**📝 포스트 내용:**")
+                st.markdown(f"""<div class="x-preview">{post['text']}</div>""", unsafe_allow_html=True)
+
+                # 복사 버튼
+                st.code(post["text"], language=None)
+
+            with col_right:
+                st.markdown("**📊 정보:**")
+                if post.get("pub_display"):
+                    st.markdown(f"- 🕐 **{post['pub_display']}**")
+                st.markdown(f"- 이슈성 점수: **{score:.0f}/100**")
+                post_type_label = {"quote": "💬 인물발언형", "breaking": "🚨 속보형", "news": "📰 뉴스기사형"}.get(post.get("post_type", "news"), "📰 뉴스기사형")
+                st.markdown(f"- 포스트 유형: {post_type_label}")
+                st.markdown(f"- 카테고리: {post['category']}")
+                st.markdown(f"- 대표 출처: {post['source']}")
+                if post.get("merged_sources") and len(post["merged_sources"]) > 0:
+                    other = ", ".join(post["merged_sources"][:4])
+                    st.markdown(f"- 📡 동일 뉴스 {post['duplicate_count']}개 매체: {other}")
+                if post.get("link"):
+                    st.markdown(f"- [원문 보기]({post['link']})")
+
+                # 이미지 표시
+                if saved.get("image_file") and os.path.exists(saved["image_file"]):
+                    st.markdown("**🖼️ 첨부 이미지:**")
+                    try:
+                        st.image(saved["image_file"], use_container_width=True)
+                    except Exception:
+                        st.caption("(이미지 미리보기 불가)")
+                elif post.get("image_url"):
+                    st.markdown("**🖼️ 이미지 URL:**")
+                    try:
+                        st.image(post["image_url"], use_container_width=True)
+                    except Exception:
+                        st.caption(f"URL: {post['image_url'][:80]}...")
+
+                # 파일 위치
+                if saved.get("folder"):
+                    st.caption(f"📂 {saved['folder']}")
+
+    # 전체 기사 일괄 미리보기
+    st.markdown("---")
+    st.markdown("### 📋 전체 기사 텍스트 (복사용)")
+    all_texts = "\n\n" + "═" * 40 + "\n\n"
+    all_texts = all_texts.join([
+        f"[{i+1}/{len(posts)}] {p['category']}  |  🕐 {p.get('pub_display', '?')}\n{'─' * 30}\n{p['text']}"
+        for i, p in enumerate(posts)
+    ])
+    st.text_area("전체 기사", value=all_texts, height=400, key="all_texts_area")
