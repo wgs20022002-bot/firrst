@@ -799,7 +799,13 @@ def generate_post_with_claude(
 {f'추가 지시: {extra_instruction}' if extra_instruction else ''}
 
 위 기사를 바탕으로 X 포스트를 작성하세요.
-⚠️ 중요: 기사에 나온 숫자(금액, BTC 수량, 퍼센트, 날짜 등)를 절대 변경하거나 지어내지 마세요. 기사 원문의 수치를 정확히 그대로 사용하세요.
+
+⚠️ 절대 규칙 (하나라도 어기면 실패):
+1. 숫자 정확성: 기사의 금액/수량/퍼센트/날짜를 절대 변경하거나 지어내지 마세요.
+2. 고유명사 필수: 기사에 종목명(PLTR, BTC), 회사명, 인물명이 있으면 반드시 포스트에 포함. "기술주", "대형 종목" 같은 통칭 금지.
+3. 빈 말 금지: "핵심 위협 요소 존재", "화제가 되고 있는 상황", "관심 집중" 같은 내용 없는 불릿 금지. 모든 불릿에 구체적 팩트(수치/이름/메커니즘) 필수.
+4. "누가/무엇을/왜" 답하기: 각 불릿이 이 3가지 중 최소 2개에 답해야 함.
+
 기사 내용이 잘린 경우에도 자연스럽게 마무리하세요. 포스트 텍스트만 출력하세요 (설명 없이)."""
 
     message = client.messages.create(
@@ -1354,6 +1360,16 @@ def fetch_x_influencer(display_name: str, query: str, count: int = 5, max_days: 
             # HTML 태그 제거
             summary_en = re.sub(r'<[^>]+>', '', summary_en)
 
+            # 기사 본문 스크래핑 (RSS summary는 보통 1~2줄이라 부족)
+            full_text = ""
+            if link:
+                try:
+                    full_text = scrape_article_text(link)
+                except Exception:
+                    full_text = ""
+            if not full_text or len(full_text) < 200:
+                full_text = summary_en if summary_en else title_en
+
             title_ko = quick_translate_title(title_en[:200])
 
             results.append({
@@ -1361,7 +1377,7 @@ def fetch_x_influencer(display_name: str, query: str, count: int = 5, max_days: 
                 "title_ko": title_ko,
                 "summary_en": summary_en if summary_en else title_en,
                 "summary_ko": "",
-                "full_text": summary_en if summary_en else title_en,
+                "full_text": full_text,
                 "published": published,
                 "link": link,
                 "source": f"🔍 {display_name}" + (f" ({source_media})" if source_media else ""),
