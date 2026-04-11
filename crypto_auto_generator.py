@@ -1343,9 +1343,9 @@ def fetch_x_influencer(display_name: str, handle: str, count: int = 5):
             except Exception:
                 tweet_dt = _dt(2000, 1, 1, tzinfo=_tz.utc)
 
-            # 90일(약 3개월) 이상 지난 트윗은 제외
+            # 3일 이상 지난 트윗은 제외 (최신 정보만)
             days_old = (_dt.now(_tz.utc) - tweet_dt).days
-            if days_old > 90:
+            if days_old > 3:
                 continue
 
             tweet_id = tweet.get("id_str", "")
