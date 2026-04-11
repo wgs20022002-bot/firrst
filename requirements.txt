@@ -4,3 +4,4 @@ anthropic
 deep_translator
 requests
 beautifulsoup4
+yt-dlp
