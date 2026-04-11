@@ -1330,30 +1330,54 @@ def summarize_text(text: str, translator=None, max_sentences: int = 5) -> str:
         return summary_en
 
 
-def fetch_x_influencer(display_name: str, handle: str, count: int = 5):
-    """X 인플루언서 피드를 Twitter Syndication API로 수집"""
+def _fetch_syndication_html(handle: str) -> str:
+    """Syndication API HTML 가져오기 (캐시 + rate limit 대응)"""
     import time as _time
-    results = []
-    resp = None
-    for attempt in range(2):
+    for attempt in range(3):
         try:
             url = X_SYNDICATION_URL.format(handle=handle)
-            resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}, timeout=15)
+            resp = requests.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }, timeout=15)
             if resp.status_code == 429:
-                _time.sleep(3 + attempt * 2)
+                _time.sleep(5 + attempt * 5)  # 5초, 10초, 15초 대기
                 continue
-            if resp.status_code != 200:
-                return results
-            break
+            if resp.status_code == 200:
+                return resp.text
+            return ""
         except Exception:
-            return results
-    if resp is None or resp.status_code != 200:
+            return ""
+    return ""
+
+# 메모리 캐시: {handle: (timestamp, html)} — 같은 세션 내 중복 요청 방지
+_syndication_cache = {}
+_CACHE_TTL = 600  # 10분
+
+def _get_syndication_cached(handle: str) -> str:
+    """캐시된 Syndication HTML 반환 (10분 TTL)"""
+    import time as _time
+    now = _time.time()
+    if handle in _syndication_cache:
+        ts, html = _syndication_cache[handle]
+        if now - ts < _CACHE_TTL:
+            return html
+    html = _fetch_syndication_html(handle)
+    if html:
+        _syndication_cache[handle] = (now, html)
+    return html
+
+
+def fetch_x_influencer(display_name: str, handle: str, count: int = 5):
+    """X 인플루언서 피드를 Twitter Syndication API로 수집"""
+    results = []
+    html = _get_syndication_cached(handle)
+    if not html:
         return results
 
     try:
         # __NEXT_DATA__ JSON 추출
         import re as _re, json as _json
-        match = _re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', resp.text)
+        match = _re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html)
         if not match:
             return results
 
@@ -1522,9 +1546,10 @@ def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=
         except Exception:
             continue
 
-        # Rate limit 방지: 5개마다 1초 대기
+        # Rate limit 방지: 매 요청마다 1초, 5개마다 추가 3초 대기
+        _time.sleep(1)
         if (idx + 1) % 5 == 0:
-            _time.sleep(1)
+            _time.sleep(3)
 
     # 이슈성 점수 계산
     for item in all_items:
