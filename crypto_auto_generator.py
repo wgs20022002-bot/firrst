@@ -2282,14 +2282,18 @@ with st.sidebar:
     elif feed_mode == "📋 전체 선택":
         selected_feeds = list(RSS_FEEDS.keys())
     elif feed_mode == "❌ 전체 해제 (직접 선택)":
-        # 전부 해제 상태에서 원하는 것만 선택
         for cat_name, feeds in feed_categories.items():
-            with st.expander(cat_name, expanded=True):
-                for feed in feeds:
-                    if feed in RSS_FEEDS:
-                        checked = st.checkbox(feed, value=False, key=f"feed_{feed}")
-                        if checked:
-                            selected_feeds.append(feed)
+            valid_feeds = [f for f in feeds if f in RSS_FEEDS]
+            if not valid_feeds:
+                continue
+            cat_key = f"feed_cat_{cat_name}"
+            cat_checked = st.checkbox(f"**{cat_name}** ({len(valid_feeds)}개)", value=False, key=cat_key)
+            with st.expander(cat_name, expanded=cat_checked):
+                for feed in valid_feeds:
+                    default_val = True if cat_checked else False
+                    checked = st.checkbox(feed, value=default_val, key=f"feed_{feed}")
+                    if checked:
+                        selected_feeds.append(feed)
     else:
         for cat_name, feeds in feed_categories.items():
             with st.expander(cat_name, expanded=False):
@@ -2349,12 +2353,17 @@ with st.sidebar:
         selected_influencers = list(X_INFLUENCERS.keys())
     elif inf_mode == "❌ 전체 해제 (직접 선택)":
         for cat_name, influencers in influencer_categories.items():
-            with st.expander(cat_name, expanded=True):
-                for inf in influencers:
-                    if inf in X_INFLUENCERS:
-                        checked = st.checkbox(inf, value=False, key=f"inf_{inf}")
-                        if checked:
-                            selected_influencers.append(inf)
+            valid_infs = [inf for inf in influencers if inf in X_INFLUENCERS]
+            if not valid_infs:
+                continue
+            cat_key = f"inf_cat_{cat_name}"
+            cat_checked = st.checkbox(f"**{cat_name}** ({len(valid_infs)}개)", value=False, key=cat_key)
+            with st.expander(cat_name, expanded=cat_checked):
+                for inf in valid_infs:
+                    default_val = True if cat_checked else False
+                    checked = st.checkbox(inf, value=default_val, key=f"inf_{inf}")
+                    if checked:
+                        selected_influencers.append(inf)
     else:
         for cat_name, influencers in influencer_categories.items():
             with st.expander(cat_name, expanded=False):
