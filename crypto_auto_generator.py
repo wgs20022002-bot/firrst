@@ -112,7 +112,7 @@ TESLA_KEYWORDS = [
 # ─────────────────────────────────────────────
 #  Google News RSS (인플루언서 뉴스 수집)
 # ─────────────────────────────────────────────
-GOOGLE_NEWS_RSS = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+GOOGLE_NEWS_RSS = "https://news.google.com/rss/search?q={query}+when:3d&hl=en-US&gl=US&ceid=US:en"
 
 # ─────────────────────────────────────────────
 #  X 인플루언서 계정 (Nitter RSS로 수집)
@@ -1310,8 +1310,8 @@ def summarize_text(text: str, translator=None, max_sentences: int = 5) -> str:
         return summary_en
 
 
-def fetch_x_influencer(display_name: str, query: str, count: int = 5):
-    """Google News RSS로 인플루언서/키워드 관련 뉴스 수집"""
+def fetch_x_influencer(display_name: str, query: str, count: int = 5, max_days: int = 3):
+    """Google News RSS로 인플루언서/키워드 관련 뉴스 수집 (max_days 이내만)"""
     results = []
     try:
         feed_url = GOOGLE_NEWS_RSS.format(query=query)
@@ -1319,12 +1319,18 @@ def fetch_x_influencer(display_name: str, query: str, count: int = 5):
         if not feed.entries:
             return results
 
-        for entry in feed.entries[:count]:
+        now_utc = datetime.now(timezone.utc)
+        for entry in feed.entries[:count * 3]:  # 날짜 필터로 걸러질 것 대비 여유분
             title_en = clean_text(entry.get("title", ""))
             if not title_en or len(title_en) < 10:
                 continue
 
             published = entry.get("published", "")
+            # 3일 이내 기사만 허용
+            pub_dt = parse_pub_date(published)
+            age_days = (now_utc - pub_dt).total_seconds() / 86400
+            if age_days > max_days:
+                continue
             link = entry.get("link", "")
             # Google News 소스 추출 (제목 뒤에 " - 매체명" 형태)
             source_media = ""
@@ -1355,12 +1361,12 @@ def fetch_x_influencer(display_name: str, query: str, count: int = 5):
 
     except Exception:
         pass
-    return results
+    return results[:count]  # 날짜 필터 후 count 제한
 
 
 def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=None,
                    influencer_names: list = None, count_per_influencer: int = 3,
-                   feed_dict: dict = None):
+                   feed_dict: dict = None, max_days: int = 3):
     """모든 RSS 소스 + X 인플루언서에서 뉴스 수집. feed_dict로 커스텀 피드 사용 가능."""
     all_items = []
     influencer_names = influencer_names or []
@@ -1386,8 +1392,20 @@ def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=
 
         try:
             feed = feedparser.parse(feed_url)
-            for entry in feed.entries[:count_per_feed]:
+            now_utc = datetime.now(timezone.utc)
+            added = 0
+            for entry in feed.entries:
+                if added >= count_per_feed:
+                    break
                 title_en = clean_text(entry.get("title", ""))
+                published = entry.get("published", "")
+
+                # 날짜 필터: max_days 이내 기사만
+                pub_dt = parse_pub_date(published)
+                age_days = (now_utc - pub_dt).total_seconds() / 86400
+                if age_days > max_days:
+                    continue
+
                 link = entry.get("link", "#")
                 image_url = extract_image_from_rss(entry)
                 rss_summary = clean_text(entry.get("summary", entry.get("description", "")))
@@ -1409,8 +1427,7 @@ def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=
                 # 제목 1차 번역 (미리보기용)
                 title_ko = quick_translate_title(title_en, is_korean)
 
-                published = entry.get("published", "")
-
+                added += 1
                 all_items.append({
                     "title_en": title_en,
                     "title_ko": title_ko,
@@ -1439,7 +1456,7 @@ def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=
             continue
 
         try:
-            items = fetch_x_influencer(display_name, handle, count_per_influencer)
+            items = fetch_x_influencer(display_name, handle, count_per_influencer, max_days=max_days)
             all_items.extend(items)
         except Exception:
             continue
@@ -2381,6 +2398,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🎯 생성 설정")
     num_posts = st.slider("생성할 기사 수", 5, 50, 25)
+    max_news_days = st.slider("📅 최신 뉴스 필터 (일)", 1, 7, 3, help="이 기간 이내의 뉴스만 수집")
     news_per_feed = st.slider("소스당 수집 수", 3, 15, 8)
     inf_per_account = st.slider("인플루언서당 수집 수", 1, 10, 5)
     min_score = st.slider("최소 이슈성 점수", 0, 50, 5)
@@ -2428,7 +2446,8 @@ with news_tab_crypto:
                 selected_feeds, news_per_feed, update_progress,
                 influencer_names=selected_influencers,
                 count_per_influencer=inf_per_account,
-                feed_dict=RSS_FEEDS
+                feed_dict=RSS_FEEDS,
+                max_days=max_news_days,
             )
             rss_count = sum(1 for n in all_news if not n["source"].startswith("🐦"))
             x_count = sum(1 for n in all_news if n["source"].startswith("🐦"))
