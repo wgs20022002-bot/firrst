@@ -56,14 +56,22 @@ RSS_FEEDS = {
     "🌏 Wu Blockchain":   "https://www.wu-blockchain.com/feed",
     "🪨 CryptoSlate":     "https://cryptoslate.com/feed/",
     "📡 BeInCrypto":      "https://beincrypto.com/feed/",
+    "📰 CoinJournal":     "https://coinjournal.net/feed/",
+    "🌐 NewsBTC":         "https://www.newsbtc.com/feed/",
+    "📈 Bitcoinist":      "https://bitcoinist.com/feed/",
+    "🔶 U.Today":         "https://u.today/rss",
+    "📰 AMBCrypto":       "https://ambcrypto.com/feed/",
     # ── 기관/ETF/월스트리트 ──
     "📈 Blockworks":      "https://blockworks.co/feed",
     "🏦 DL News":         "https://www.dlnews.com/arc/outboundfeeds/rss/",
     "💹 CNBC Crypto":     "https://www.cnbc.com/id/10001147/device/rss/rss.html",
-    # ── 온체인/데이터 ──
+    # ── 온체인/데이터/분석 (BitcoinSapiens 주요 소스) ──
     "🐋 Whale Alert Blog": "https://whale-alert.io/feed",
     "📉 Glassnode Blog":  "https://insights.glassnode.com/rss/",
     "🦎 CoinGecko Blog":  "https://blog.coingecko.com/feed/",
+    "🔗 Chainalysis Blog": "https://blog.chainalysis.com/feed/",
+    "📊 Santiment Blog":  "https://insights.santiment.net/feed",
+    "🔎 CryptoQuant Blog": "https://cryptoquant.com/blog/rss",
     # ── 리서치/DeFi ──
     "🔬 Messari":         "https://messari.io/rss",
     "🛡️ The Defiant":     "https://thedefiant.io/api/feed",
@@ -154,6 +162,21 @@ X_INFLUENCERS = {
     "📊 Will Clemente":     "WClementeIII",
     "🔵 Kevin O'Leary":     "kevinolearytv",
     "💰 Mark Cuban":        "mcuban",
+    # ═══════════════════════════════════════════════
+    #  온체인/데이터 계정 (BitcoinSapiens 주요 소스)
+    # ═══════════════════════════════════════════════
+    "⚡ BitcoinSapiens":    "BitcoinSapiens",
+    "📺 Simply Bitcoin":    "SimplyBitcoinTV",
+    "📊 Tuur Demeester":    "TuurDemeester",
+    "📈 Dylan LeClair":     "DylanLeClair_",
+    "🔗 Willy Woo (data)":  "woonomic",
+    "📊 Glassnode":         "glaborit",
+    "🔎 CryptoQuant":       "cryptaborit",
+    "🐋 Santiment":         "santaborit",
+    "📊 TrendingBTC":       "TrendingBitcoin",
+    "📉 Bitcoin Archive":   "BTC_Archive",
+    "📊 Bitcoin Mag Pro":   "BitcoinMagPro",
+    "🔵 Swan Bitcoin":      "SwanBitcoin",
     # ═══════════════════════════════════════════════
     #  한국 인플루언서
     # ═══════════════════════════════════════════════
@@ -506,36 +529,139 @@ def cut_at_sentence(text: str, max_len: int = 200) -> str:
 # ═══════════════════════════════════════
 
 CLAUDE_SYSTEM_PROMPT = """당신은 한국어 X(트위터) 크립토 전문 계정 운영자입니다.
+CryptoYuna(@CryptoYuna_) 스타일을 참고하되, 자체 톤을 유지합니다.
 아래 규칙을 **반드시** 지켜서 X 포스트를 작성하세요.
 
-── 포스트 스타일 규칙 ──
-1. 이모지: 🚨📌🔥💥🇺🇸🐋📊⚠️ 중에서 **1개만** 첫 줄 앞에 사용
-2. 불릿: • (가운뎃점) 사용. - 사용 금지
-3. 인물 발언이면: `인물명(직함) : "발언 요약"` 형태로 첫 줄 구성
-4. 해시태그 사용 금지
-5. 외부 링크 본문에 넣지 않음
-6. 출처: 마지막 줄에 [출처 : 매체명]
-7. 영어 고유명사(기업명, 프로젝트명, 인물명, 티커)는 영문 그대로 표기 (번역 금지)
-   예: Strategy, MicroStrategy, STRC, BlackRock, Coinbase, Morning Minute
-8. 한국어는 자연스럽고 간결하게. 번역투 금지.
+═══ CryptoYuna 스타일 가이드 (실제 분석 기반) ═══
 
-── 포스트 구조 ──
-• 첫 줄(훅): 숫자, 질문, 또는 반전으로 시선 끌기
-• 중간(불릿 3~5개): 핵심 팩트 + 수치 + 이유/맥락
-• 마지막: 의견 한 줄 또는 질문형 CTA ("어떻게 보시나요?", "북마크 추천")
+【이모지 규칙】
+• 허용 이모지: 🚨📌🔥💥🇺🇸🇰🇷🐋📊⚠️ + 국기 이모지
+• 첫 줄 맨 앞에 **1개만** 사용 (절대 2개 이상 금지)
+• 🚨은 가장 자주 사용 — 속보, ETF 유입, 주요 발언, 규제 뉴스 등 대부분에 사용
+• 본문 중간에 이모지 절대 넣지 않음
+• 예외: ETF 데이터 포스트에서 🟠 Bitcoin / 🔵 Ethereum으로 섹션 구분 허용
+• 선택 기준:
+  - 🚨 = 속보, 긴급, 해킹, 청산, 금리
+  - 📌 = 인물 발언, CEO 코멘트, 공식 발표
+  - 🔥 = 급등, 돌파, 강세, 신고가, 출시
+  - 💥 = 온체인 데이터, 유입/유출, TVL
+  - 🐋 = 고래 이체, 대량 매수/매도
+  - 📊 = ETF, 차트 분석, 리포트, 도미넌스
+  - ⚠️ = 경고, 하락, 리스크, 사기
+  - 🇺🇸🇨🇳🇯🇵🇰🇷 등 = 국가 관련 뉴스
 
-── 포스트 유형 ──
-사용자가 지정한 유형에 맞춰 작성:
-• "single" → 단일 포스트 (280자 한국어 기준 적당히)
-• "thread" → 스레드 (3~7개 연결 포스트). 각 포스트를 [1/N] 형태로 번호 매기기.
-  첫 번째는 훅, 마지막은 CTA.
-• "analysis" → 데이터/차트 분석형. 수치 강조, 본인 해석 추가.
-• "opinion" → 뉴스 + 개인 의견. "제 생각에는..." 톤.
+【첫 줄 (훅) — 가장 중요】
+• 숫자로 시작: "BTC $84,000 돌파", "Strategy 2,500 BTC 추가 매수"
+• 인물 발언: `📌 Larry Fink(BlackRock CEO) : "Bitcoin은 디지털 금"`
+• 질문/반전: "아직도 BTC 안 샀다고?", "SEC가 드디어 항복했다"
+• 한 줄로 핵심 요약 — 이것만 읽어도 무슨 뉴스인지 알 수 있어야 함
 
-── 금지 사항 ──
-• 단순 가격 펌핑 표현 ("to the moon!", "100x!!")
-• 이모지 도배 (1개만)
-• 기사를 그대로 번역하지 말 것. 핵심만 추려서 재구성할 것.
+【본문 (불릿 3~5개)】
+• 불릿은 반드시 • (가운뎃점) 사용 (- 절대 금지)
+• 각 불릿은 1줄, 팩트 + 수치 위주
+• 맥락/이유 설명은 간결하게
+• 예시:
+  • 총 매수량: 553,555 BTC ($37.9B)
+  • 평균 매입가: $68,459
+  • 미실현 수익: +$14.8B (+38.7%)
+
+【마지막 줄 (CTA)】
+• 질문형 (가장 효과적): "여러분은 연말 비트코인 가격을 얼마로 예상하시나요?"
+• 감탄형: "투자자들의 $75k 기대감이 빠르게 높아지고 있습니다 !"
+• 의견형: "기관들이 움직이기 시작했다."
+• 느낌표와 감탄부호를 자연스럽게 사용 ("!" 활용)
+
+【출처】
+• 마지막 줄: [출처 : 매체명] 형태
+
+═══ 포스트 유형 ═══
+
+"single" → 단일 포스트
+  한 뉴스를 이모지 + 훅 + 불릿 3~5개 + CTA + 출처로 구성.
+  X 기준 1개 포스트에 들어가는 분량 (한국어 140~200자 내외).
+
+"quote_post" → 인물 발언 포스트 (CryptoYuna 주력 콘텐츠)
+  인물이 한 말을 인용하고 맥락/의미를 설명.
+  형식 예시:
+  ---
+  🚨 릭 에델만 : "모건스탠리 BTC ETF, 첫 해 $70억 유치 전망!"
+
+  "상장 첫날 3,400만 달러의 유입 속도를 기준으로 보면, 첫 해에 약 70억 달러를 유치할 것으로 예상된다."
+
+  • 낮은 수수료로 기존 크립토 ETF에서 자금 이동 예상
+  • 오랜 기간 모건스탠리를 신뢰해온 고객들의 새로운 자본 대거 유입
+  ---
+  주의: 인물 발언은 대부분 🚨 또는 📌 사용. 발언을 쌍따옴표("")로 감쌈.
+
+"data_post" → 온체인/데이터 분석 포스트
+  ETF 자금 흐름, 거래소 잔고, 확률 데이터 등 수치 중심.
+  형식 예시 (ETF 유입):
+  ---
+  🚨 비트코인, 이더리움 ETF 기관 자금 동시 유입 !
+
+  🟠 Bitcoin ETF 총 유입: +$240.4M
+  • BlackRock (IBIT): +$137.6M
+  • Fidelity (FBTC): +$78.0M
+
+  🔵 Ethereum ETF 총 유입: +$64.9M
+  • BlackRock (ETHA): +$53.7M
+  ---
+  주의: BTC는 🟠, ETH는 🔵로 섹션 구분. 수치는 $달러 표기.
+
+  형식 예시 (확률/전망):
+  ---
+  📊 비트코인 4월 $75,000 도달 확률 72%로 급등!
+
+  • 4월 7~8일 : 약 47~54%
+  • 4월 9일 : 63%
+  • 4월 10일 : 57%
+  • 4월 11일 : 72%로 급증
+
+  투자자들의 4월 $75k 기대감이 빠르게 높아지고 있습니다 !
+  ---
+
+"breaking" → 속보 포스트
+  빠르고 간결하게. 핵심 요약 + 2~3 불릿.
+  형식 예시:
+  ---
+  🚨 벨라루스 중앙은행 "비트코인 포함 25개 암호화폐, 크립토 은행에서 사용 허용!"
+
+  오늘 NBRB 부총재 공식 발표
+  • 비트코인, 스테이블코인 등 총 약 25종 암호화폐 공식 허용
+  • 7월 2일까지 모든 규제 세부사항 완료 예정
+  ---
+
+"whale_alert" → 고래 추적 포스트
+  대량 이체, 거래소 입출금, 고래 매수/매도.
+  형식: 🐋 고래 움직임 한 줄
+  • 이체 수량/금액
+  • 출발지 → 도착지
+  • 시장 영향 해석
+  [출처 : Whale Alert / Lookonchain]
+
+"thread" → 스레드 (3~7개 연결 포스트)
+  [1/N] ~ [N/N] 형태. 첫 번째=훅, 마지막=CTA.
+  하나의 주제를 깊이 있게 다룸.
+
+"analysis" → 심층 분석 포스트
+  차트/데이터 기반 본인 해석. 수치 강조.
+
+"opinion" → 뉴스 + 개인 의견
+  "제 생각에는..." 톤으로 자기 견해 표현.
+
+═══ 절대 금지 사항 ═══
+• 해시태그 사용 금지 (#Bitcoin, #BTC 등)
+• 외부 링크 본문에 넣지 않음
+• 이모지 도배 (1개만!)
+• 본문 중간 이모지 삽입 금지
+• 단순 펌핑 표현 ("to the moon!", "100x!!")
+• 기사를 그대로 번역하지 말 것 — 핵심만 추려서 재구성
+• 번역투 금지 ("~에 따르면", "~인 것으로 알려졌다" 대신 자연스러운 한국어)
+• "-" 불릿 사용 금지 (• 만 사용)
+
+═══ 영어 고유명사 규칙 ═══
+영어 고유명사(기업명, 프로젝트명, 인물명, 티커)는 영문 그대로 표기:
+Strategy, MicroStrategy, BlackRock, Coinbase, BTC, ETH, Solana 등
 """
 
 
@@ -1522,25 +1648,38 @@ QUOTE_MARKERS = ["says", "said", "argues", "believes", "predicts", "warns",
                  "expects", "forecasts", "claims", "states", "announces"]
 
 
-def detect_post_type(title_en: str, summary_en: str) -> str:
-    """포스트 유형 자동 감지: 'quote' / 'breaking' / 'news'"""
+def detect_post_type(title_en: str, summary_en: str, source: str = "") -> str:
+    """포스트 유형 자동 감지 → UI selectbox 기본값 추천용"""
     title_lower = title_en.lower()
     combined = (title_en + " " + summary_en).lower()
 
-    # 인물 발언 감지 — 제목에서만 인물을 찾는다 (본문 인물 오귀속 방지)
+    # 인물 발언 감지 → quote_post
     has_person = any(k in title_lower for k in PERSON_KEYWORDS if k not in QUOTE_MARKERS)
     has_quote_verb = any(q in title_lower for q in QUOTE_MARKERS)
-    has_quotation = '"' in title_en or '"' in title_en or ':' in title_en
+    has_quotation = '"' in title_en or '\u201c' in title_en or ':' in title_en
     if has_person and (has_quote_verb or has_quotation):
-        return "quote"
+        return "quote_post"
 
-    # 속보 감지
+    # 고래 움직임 감지 → whale_alert
+    whale_words = ["whale", "transfer", "moved", "deposit", "withdraw",
+                   "exchange inflow", "exchange outflow", "고래"]
+    if any(w in combined for w in whale_words):
+        return "whale_alert"
+
+    # 속보 감지 → breaking
     breaking_words = ["breaking", "urgent", "just in", "hack", "exploit",
-                      "crash", "war ", "missile", "military strike"]
+                      "crash", "war ", "missile", "military strike", "arrested"]
     if any(w in combined for w in breaking_words):
         return "breaking"
 
-    return "news"
+    # 온체인/데이터 감지 → data_post
+    data_words = ["on-chain", "onchain", "etf flow", "etf inflow", "etf outflow",
+                  "tvl", "dominance", "exchange reserve", "hashrate", "mining",
+                  "supply", "realized", "mvrv", "nupl"]
+    if any(w in combined for w in data_words):
+        return "data_post"
+
+    return "single"
 
 
 def find_person_name(title_en: str, summary_en: str) -> str:
@@ -2005,17 +2144,20 @@ with st.sidebar:
     feed_categories = {
         "🔴 메이저 (추천)": ["🟠 CoinDesk", "📰 Cointelegraph", "🟣 Decrypt",
                               "📈 Blockworks", "📊 The Block"],
-        "⚡ 속보/기타": ["🔵 CryptoNews", "⚡ Bitcoin Magazine", "🌏 Wu Blockchain",
-                          "🪨 CryptoSlate", "📡 BeInCrypto", "🔔 Watcher.Guru", "🦅 CryptoPanic"],
-        "🏦 기관/데이터": ["🏦 DL News", "💹 CNBC Crypto", "🐋 Whale Alert Blog",
-                           "📉 Glassnode Blog", "🦎 CoinGecko Blog"],
+        "⚡ 속보/뉴스": ["🔵 CryptoNews", "⚡ Bitcoin Magazine", "🌏 Wu Blockchain",
+                          "🪨 CryptoSlate", "📡 BeInCrypto", "📰 CoinJournal",
+                          "🌐 NewsBTC", "📈 Bitcoinist", "🔶 U.Today", "📰 AMBCrypto",
+                          "🔔 Watcher.Guru", "🦅 CryptoPanic"],
+        "📊 온체인/데이터": ["🐋 Whale Alert Blog", "📉 Glassnode Blog", "🦎 CoinGecko Blog",
+                             "🔗 Chainalysis Blog", "📊 Santiment Blog", "🔎 CryptoQuant Blog"],
+        "🏦 기관/월스트리트": ["🏦 DL News", "💹 CNBC Crypto"],
         "🔬 리서치/DeFi": ["🔬 Messari", "🛡️ The Defiant", "📚 Coin Bureau"],
         "🇰🇷 한국 미디어": ["🇰🇷 블록미디어", "🇰🇷 디지털투데이", "🇰🇷 코인리더스"],
     }
 
     if feed_mode == "⭐ 추천 소스 (9개, 중복 최소)":
         selected_feeds = [f for f in RECOMMENDED_FEEDS if f in RSS_FEEDS]
-    elif feed_mode == "📋 전체 소스 (22개)":
+    elif feed_mode == "📋 전체 소스":
         selected_feeds = list(RSS_FEEDS.keys())
     else:
         for cat_name, feeds in feed_categories.items():
@@ -2035,6 +2177,8 @@ with st.sidebar:
         # VIP 핵심 인물
         "⭐ Michael Saylor", "⭐ Elon Musk", "⭐ Donald Trump",
         "⭐ Jim Cramer", "⭐ CZ (Binance)", "⭐ Larry Fink",
+        # 온체인/데이터 (BitcoinSapiens 소스)
+        "⚡ BitcoinSapiens", "📊 TrendingBTC", "📉 Bitcoin Archive",
         # 속보 계정
         "🔔 Watcher Guru", "📊 Tier10k (db)", "🐋 Lookonchain",
         # 한국
@@ -2043,7 +2187,7 @@ with st.sidebar:
 
     inf_mode = st.radio(
         "인플루언서 모드",
-        ["⭐ 추천 계정 (11개)", "📋 전체 계정", "🛠 수동 선택"],
+        ["⭐ 추천 계정 (14개)", "📋 전체 계정", "🛠 수동 선택"],
         index=0,
         help="추천: VIP 인물 + 핵심 속보 + 한국 계정"
     )
@@ -2055,16 +2199,20 @@ with st.sidebar:
                         "⭐ Cathie Wood", "⭐ Arthur Hayes", "⭐ Vitalik Buterin",
                         "⭐ Justin Sun", "⭐ Brian Armstrong", "⭐ Jack Dorsey",
                         "⭐ Robert Kiyosaki"],
+        "📊 온체인/데이터": ["⚡ BitcoinSapiens", "📺 Simply Bitcoin", "📊 TrendingBTC",
+                             "📉 Bitcoin Archive", "📊 Bitcoin Mag Pro", "📊 Glassnode",
+                             "🔎 CryptoQuant", "🐋 Santiment", "🔵 Swan Bitcoin"],
         "🔔 속보/뉴스": ["🔔 Watcher Guru", "📊 Tier10k (db)", "🐳 Whale Alert",
-                         "🦅 ZachXBT", "📡 Unusual Whales", "🌍 Mario Nawfal"],
-        "📊 트레이더/분석가": ["⚡ Samson Mow", "📊 Raoul Pal", "🐂 Pompliano",
+                         "🦅 ZachXBT", "📡 Unusual Whales", "🌍 Mario Nawfal", "🐋 Lookonchain"],
+        "📈 트레이더/분석가": ["⚡ Samson Mow", "📊 Raoul Pal", "🐂 Pompliano",
+                              "📊 Tuur Demeester", "📈 Dylan LeClair",
                               "🎯 Willy Woo", "📉 Peter Schiff", "📐 Peter Brandt",
                               "🦈 Barry Silbert", "🏦 Tom Lee", "📊 Will Clemente",
-                              "🔵 Kevin O'Leary", "💰 Mark Cuban", "🐋 Lookonchain"],
+                              "🔵 Kevin O'Leary", "💰 Mark Cuban"],
         "🇰🇷 한국": ["🇰🇷 CryptoYuna", "🇰🇷 김영훈 IQ276", "🇰🇷 Ki Young Ju", "🇰🇷 코인니스"],
     }
 
-    if inf_mode == "⭐ 추천 계정 (11개)":
+    if inf_mode == "⭐ 추천 계정 (14개)":
         selected_influencers = [inf for inf in RECOMMENDED_INFLUENCERS if inf in X_INFLUENCERS]
     elif inf_mode == "📋 전체 계정":
         selected_influencers = list(X_INFLUENCERS.keys())
@@ -2313,10 +2461,22 @@ if "collected_news" in st.session_state and st.session_state["collected_news"]:
                 st.markdown("---")
 
                 # ── 포스트 생성 ──
+                type_options = ["single", "quote_post", "data_post", "breaking", "whale_alert", "analysis", "opinion"]
+                auto_type = detect_post_type(news["title_en"], news.get("summary_en", ""), news.get("source", ""))
+                default_idx = type_options.index(auto_type) if auto_type in type_options else 0
                 post_type = st.selectbox(
                     "포스트 유형",
-                    ["single", "analysis", "opinion"],
-                    format_func=lambda x: {"single": "📝 단일 포스트", "analysis": "📊 데이터 분석형", "opinion": "💬 뉴스 + 내 의견"}[x],
+                    type_options,
+                    index=default_idx,
+                    format_func=lambda x: {
+                        "single": "📝 단일 포스트",
+                        "quote_post": "📌 인물 발언 포스트",
+                        "data_post": "💥 온체인/데이터 포스트",
+                        "breaking": "🚨 속보 포스트",
+                        "whale_alert": "🐋 고래 추적 포스트",
+                        "analysis": "📊 심층 분석형",
+                        "opinion": "💬 뉴스 + 내 의견",
+                    }[x],
                     key=f"type_{i}"
                 )
                 extra_note = st.text_input(
@@ -2375,8 +2535,16 @@ if "collected_news" in st.session_state and st.session_state["collected_news"] a
 
     batch_type = st.selectbox(
         "일괄 생성 포스트 유형",
-        ["single", "analysis", "opinion"],
-        format_func=lambda x: {"single": "📝 단일 포스트", "analysis": "📊 데이터 분석형", "opinion": "💬 뉴스 + 내 의견"}[x],
+        ["single", "quote_post", "data_post", "breaking", "whale_alert", "analysis", "opinion"],
+        format_func=lambda x: {
+            "single": "📝 단일 포스트",
+            "quote_post": "📌 인물 발언 포스트",
+            "data_post": "💥 온체인/데이터 포스트",
+            "breaking": "🚨 속보 포스트",
+            "whale_alert": "🐋 고래 추적 포스트",
+            "analysis": "📊 심층 분석형",
+            "opinion": "💬 뉴스 + 내 의견",
+        }[x],
         key="batch_type"
     )
 
