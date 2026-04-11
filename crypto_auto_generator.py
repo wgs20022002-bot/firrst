@@ -2396,12 +2396,14 @@ with st.sidebar:
             if not valid_feeds:
                 continue
             cat_key = f"feed_cat_{cat_name}"
+            prev_key = f"_prev_{cat_key}"
             cat_checked = st.checkbox(f"**{cat_name}** ({len(valid_feeds)}개)", value=False, key=cat_key)
-            # 카테고리 체크 시 하위 항목 session_state 동기화
-            for feed in valid_feeds:
-                feed_key = f"feed_{feed}"
-                if cat_key in st.session_state:
-                    st.session_state[feed_key] = st.session_state[cat_key]
+            # 카테고리 값이 변경될 때만 하위 항목 동기화
+            prev_val = st.session_state.get(prev_key, None)
+            if prev_val is not None and prev_val != cat_checked:
+                for feed in valid_feeds:
+                    st.session_state[f"feed_{feed}"] = cat_checked
+            st.session_state[prev_key] = cat_checked
             with st.expander(cat_name, expanded=cat_checked):
                 for feed in valid_feeds:
                     checked = st.checkbox(feed, value=False, key=f"feed_{feed}")
@@ -2487,12 +2489,14 @@ with st.sidebar:
             if not valid_infs:
                 continue
             cat_key = f"inf_cat_{cat_name}"
+            prev_key = f"_prev_{cat_key}"
             cat_checked = st.checkbox(f"**{cat_name}** ({len(valid_infs)}개)", value=False, key=cat_key)
-            # 카테고리 체크 시 하위 항목 session_state 동기화
-            for inf in valid_infs:
-                inf_key = f"inf_{inf}"
-                if cat_key in st.session_state:
-                    st.session_state[inf_key] = st.session_state[cat_key]
+            # 카테고리 값이 변경될 때만 하위 항목 동기화
+            prev_val = st.session_state.get(prev_key, None)
+            if prev_val is not None and prev_val != cat_checked:
+                for inf in valid_infs:
+                    st.session_state[f"inf_{inf}"] = cat_checked
+            st.session_state[prev_key] = cat_checked
             with st.expander(cat_name, expanded=cat_checked):
                 for inf in valid_infs:
                     checked = st.checkbox(inf, value=False, key=f"inf_{inf}")
