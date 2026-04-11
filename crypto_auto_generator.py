@@ -2169,9 +2169,9 @@ with st.sidebar:
 
     feed_mode = st.radio(
         "소스 모드",
-        ["⭐ 추천 소스 (9개, 중복 최소)", "📋 전체 소스 (22개)", "🛠 수동 선택"],
+        ["⭐ 추천 소스", "📋 전체 선택", "🛠 수동 선택", "❌ 전체 해제 (직접 선택)"],
         index=0,
-        help="추천: 품질 높은 대표 소스만. 전체: 모든 소스 (중복은 자동 제거됨)"
+        help="추천: 품질 높은 대표 소스만. 전체 해제: 원하는 것만 직접 골라서 사용"
     )
 
     selected_feeds = []
@@ -2189,10 +2189,19 @@ with st.sidebar:
         "🇰🇷 한국 미디어": ["🇰🇷 블록미디어", "🇰🇷 디지털투데이", "🇰🇷 코인리더스"],
     }
 
-    if feed_mode == "⭐ 추천 소스 (9개, 중복 최소)":
+    if feed_mode == "⭐ 추천 소스":
         selected_feeds = [f for f in RECOMMENDED_FEEDS if f in RSS_FEEDS]
-    elif feed_mode == "📋 전체 소스":
+    elif feed_mode == "📋 전체 선택":
         selected_feeds = list(RSS_FEEDS.keys())
+    elif feed_mode == "❌ 전체 해제 (직접 선택)":
+        # 전부 해제 상태에서 원하는 것만 선택
+        for cat_name, feeds in feed_categories.items():
+            with st.expander(cat_name, expanded=True):
+                for feed in feeds:
+                    if feed in RSS_FEEDS:
+                        checked = st.checkbox(feed, value=False, key=f"feed_{feed}")
+                        if checked:
+                            selected_feeds.append(feed)
     else:
         for cat_name, feeds in feed_categories.items():
             with st.expander(cat_name, expanded=False):
@@ -2221,7 +2230,7 @@ with st.sidebar:
 
     inf_mode = st.radio(
         "인플루언서 모드",
-        ["⭐ 추천 계정 (14개)", "📋 전체 계정", "🛠 수동 선택"],
+        ["⭐ 추천 계정 (14개)", "📋 전체 계정", "🛠 수동 선택", "❌ 전체 해제 (직접 선택)"],
         index=0,
         help="추천: VIP 인물 + 핵심 속보 + 한국 계정"
     )
@@ -2250,6 +2259,14 @@ with st.sidebar:
         selected_influencers = [inf for inf in RECOMMENDED_INFLUENCERS if inf in X_INFLUENCERS]
     elif inf_mode == "📋 전체 계정":
         selected_influencers = list(X_INFLUENCERS.keys())
+    elif inf_mode == "❌ 전체 해제 (직접 선택)":
+        for cat_name, influencers in influencer_categories.items():
+            with st.expander(cat_name, expanded=True):
+                for inf in influencers:
+                    if inf in X_INFLUENCERS:
+                        checked = st.checkbox(inf, value=False, key=f"inf_{inf}")
+                        if checked:
+                            selected_influencers.append(inf)
     else:
         for cat_name, influencers in influencer_categories.items():
             with st.expander(cat_name, expanded=False):
