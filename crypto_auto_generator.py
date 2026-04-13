@@ -1203,6 +1203,378 @@ def download_video_ytdlp(video_url: str, save_dir: str, filename: str = "video")
     return ""
 
 
+# ═══════════════════════════════════════
+#  인터뷰 클리핑 기능 (BitcoinSapiens 스타일)
+# ═══════════════════════════════════════
+
+def extract_youtube_subtitles(video_url: str) -> dict:
+    """YouTube 영상에서 자막(자동 생성 포함) 추출. {lang, segments: [{start, end, text}]}"""
+    try:
+        import yt_dlp
+        ydl_opts = {
+            'skip_download': True,
+            'writesubtitles': True,
+            'writeautomaticsub': True,
+            'subtitleslangs': ['en', 'en-US', 'ko'],
+            'quiet': True,
+            'no_warnings': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+
+        title = info.get("title", "")
+        duration = info.get("duration", 0)
+        thumbnail = info.get("thumbnail", "")
+        channel = info.get("channel", info.get("uploader", ""))
+
+        # 자막 데이터 추출
+        subtitles = info.get("subtitles", {})
+        auto_subs = info.get("automatic_captions", {})
+
+        # 우선순위: 수동 영어자막 > 자동 영어자막 > 수동 한국어 > 자동 한국어
+        sub_data = None
+        sub_lang = ""
+        for lang_key in ["en", "en-US", "en-orig"]:
+            if lang_key in subtitles:
+                sub_data = subtitles[lang_key]
+                sub_lang = "en"
+                break
+        if not sub_data:
+            for lang_key in ["en", "en-US", "en-orig"]:
+                if lang_key in auto_subs:
+                    sub_data = auto_subs[lang_key]
+                    sub_lang = "en (auto)"
+                    break
+        if not sub_data:
+            if "ko" in subtitles:
+                sub_data = subtitles["ko"]
+                sub_lang = "ko"
+            elif "ko" in auto_subs:
+                sub_data = auto_subs["ko"]
+                sub_lang = "ko (auto)"
+
+        if not sub_data:
+            return {"error": "자막을 찾을 수 없습니다. 자막이 없는 영상일 수 있습니다.", "title": title}
+
+        # json3 또는 vtt 형식에서 텍스트 추출
+        segments = []
+        for fmt in sub_data:
+            if fmt.get("ext") == "json3":
+                # json3에서 직접 다운로드
+                sub_url = fmt.get("url", "")
+                if sub_url:
+                    try:
+                        resp = requests.get(sub_url, timeout=15)
+                        j = resp.json()
+                        events = j.get("events", [])
+                        for ev in events:
+                            start_ms = ev.get("tStartMs", 0)
+                            dur_ms = ev.get("dDurationMs", 0)
+                            segs = ev.get("segs", [])
+                            text = "".join(s.get("utf8", "") for s in segs).strip()
+                            if text and text != "\n":
+                                segments.append({
+                                    "start": start_ms / 1000,
+                                    "end": (start_ms + dur_ms) / 1000,
+                                    "text": text.replace("\n", " "),
+                                })
+                    except Exception:
+                        pass
+                if segments:
+                    break
+
+        # json3 실패 시 vtt 시도
+        if not segments:
+            for fmt in sub_data:
+                if fmt.get("ext") == "vtt":
+                    sub_url = fmt.get("url", "")
+                    if sub_url:
+                        try:
+                            resp = requests.get(sub_url, timeout=15)
+                            vtt_text = resp.text
+                            # 간단한 VTT 파서
+                            lines = vtt_text.split("\n")
+                            i = 0
+                            while i < len(lines):
+                                line = lines[i].strip()
+                                # 타임스탬프 라인: 00:00:01.000 --> 00:00:03.000
+                                if "-->" in line:
+                                    parts = line.split("-->")
+                                    start = _vtt_to_sec(parts[0].strip())
+                                    end = _vtt_to_sec(parts[1].strip().split(" ")[0])
+                                    text_lines = []
+                                    i += 1
+                                    while i < len(lines) and lines[i].strip():
+                                        text_lines.append(lines[i].strip())
+                                        i += 1
+                                    text = " ".join(text_lines)
+                                    # HTML 태그 제거
+                                    text = re.sub(r'<[^>]+>', '', text).strip()
+                                    if text:
+                                        segments.append({"start": start, "end": end, "text": text})
+                                i += 1
+                        except Exception:
+                            pass
+                    if segments:
+                        break
+
+        # 중복 텍스트 제거 (자동자막은 중복이 많음)
+        cleaned = []
+        prev_text = ""
+        for seg in segments:
+            if seg["text"] != prev_text:
+                cleaned.append(seg)
+                prev_text = seg["text"]
+
+        return {
+            "title": title,
+            "channel": channel,
+            "duration": duration,
+            "thumbnail": thumbnail,
+            "lang": sub_lang,
+            "segments": cleaned,
+            "full_text": " ".join(s["text"] for s in cleaned),
+        }
+    except Exception as e:
+        return {"error": f"자막 추출 실패: {str(e)}"}
+
+
+def _vtt_to_sec(vtt_time: str) -> float:
+    """VTT 타임스탬프를 초로 변환 (00:01:23.456 → 83.456)"""
+    try:
+        parts = vtt_time.replace(",", ".").split(":")
+        if len(parts) == 3:
+            return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+        elif len(parts) == 2:
+            return float(parts[0]) * 60 + float(parts[1])
+        return float(parts[0])
+    except Exception:
+        return 0.0
+
+
+def _sec_to_hms(seconds: float) -> str:
+    """초를 HH:MM:SS 형식으로 변환"""
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    if h > 0:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
+def find_quotable_moments_with_claude(api_key: str, video_title: str, subtitle_text: str,
+                                       model: str = "claude-sonnet-4-20250514",
+                                       num_quotes: int = 5) -> list:
+    """Claude가 자막에서 X 포스팅하기 좋은 핵심 발언을 찾아서 반환"""
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+
+    prompt = f"""당신은 크립토/금융 인터뷰 영상에서 X(트위터) 포스팅에 적합한 핵심 발언을 찾는 전문가입니다.
+
+아래는 YouTube 영상 "{video_title}"의 자막 텍스트입니다.
+
+<subtitles>
+{subtitle_text[:12000]}
+</subtitles>
+
+이 자막에서 X 포스팅하기 좋은 **핵심 발언 {num_quotes}개**를 찾아주세요.
+
+각 발언에 대해 아래 형식으로 정확히 출력하세요:
+
+===QUOTE_START===
+SPEAKER: (발언자 이름, 알 수 없으면 "발언자")
+ORIGINAL: (영어 원문 발언, 자막에서 정확히 인용)
+KOREAN: (한국어 번역 - 자연스럽고 임팩트 있게)
+TIMESTAMP_TEXT: (이 발언이 나오는 대략적인 위치 텍스트, 자막에서 찾아서)
+HOOK: (이 발언이 왜 주목할 만한지 1줄 설명, 한국어)
+POST_TEXT: (이 발언으로 만든 BitcoinSapiens 스타일 X 포스트 전체 텍스트, 한국어, 이모지 포함)
+===QUOTE_END===
+
+**선정 기준:**
+- 강한 주장이나 예측 ("비트코인은 100만 달러 간다" 류)
+- 구체적인 숫자나 데이터가 포함된 발언
+- 논란이 될 만한 도발적인 발언
+- 시장에 영향을 줄 수 있는 발언
+- 재미있거나 밈이 될 만한 발언
+
+POST_TEXT 작성 규칙:
+- 첫 줄: 발언자 이름 + 핵심 발언 요약 (한국어)
+- 큰따옴표로 원문 느낌 살리기
+- 이모지 적절히 사용 (🔥📌💥🚨 등)
+- 280자 이내
+"""
+
+    response = client.messages.create(
+        model=model,
+        max_tokens=4000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    result_text = response.content[0].text
+    quotes = []
+
+    # 파싱
+    blocks = result_text.split("===QUOTE_START===")
+    for block in blocks[1:]:
+        if "===QUOTE_END===" not in block:
+            continue
+        block = block.split("===QUOTE_END===")[0].strip()
+        quote = {}
+        for line in block.split("\n"):
+            line = line.strip()
+            if line.startswith("SPEAKER:"):
+                quote["speaker"] = line.replace("SPEAKER:", "").strip()
+            elif line.startswith("ORIGINAL:"):
+                quote["original"] = line.replace("ORIGINAL:", "").strip()
+            elif line.startswith("KOREAN:"):
+                quote["korean"] = line.replace("KOREAN:", "").strip()
+            elif line.startswith("TIMESTAMP_TEXT:"):
+                quote["timestamp_text"] = line.replace("TIMESTAMP_TEXT:", "").strip()
+            elif line.startswith("HOOK:"):
+                quote["hook"] = line.replace("HOOK:", "").strip()
+            elif line.startswith("POST_TEXT:"):
+                quote["post_text"] = line.replace("POST_TEXT:", "").strip()
+        if quote.get("original") and quote.get("post_text"):
+            quotes.append(quote)
+
+    return quotes
+
+
+def find_timestamp_for_quote(segments: list, quote_text: str) -> tuple:
+    """자막 세그먼트에서 인용문이 나오는 타임스탬프를 찾기"""
+    quote_words = set(quote_text.lower().split()[:8])  # 처음 8단어
+    best_match = (0, 0, 0)  # (start, end, score)
+
+    for i, seg in enumerate(segments):
+        seg_words = set(seg["text"].lower().split())
+        overlap = len(quote_words & seg_words)
+        if overlap > best_match[2]:
+            # 주변 세그먼트도 포함해서 전체 구간 계산
+            start = seg["start"]
+            end = seg["end"]
+            # 앞뒤 5초 여유
+            start = max(0, start - 5)
+            # 뒤쪽 세그먼트도 포함 (발언이 여러 세그먼트에 걸칠 수 있음)
+            for j in range(i, min(i + 10, len(segments))):
+                end = segments[j]["end"]
+                j_words = set(segments[j]["text"].lower().split())
+                if len(quote_words & j_words) == 0 and j > i + 2:
+                    break
+            end = end + 3  # 뒤에 3초 여유
+            best_match = (start, end, overlap)
+
+    return (best_match[0], best_match[1])
+
+
+def clip_video_with_ffmpeg(video_url: str, start_sec: float, end_sec: float,
+                           save_dir: str, filename: str = "clip") -> str:
+    """yt-dlp로 다운로드 후 ffmpeg로 클리핑"""
+    try:
+        import yt_dlp
+        import subprocess
+
+        os.makedirs(save_dir, exist_ok=True)
+
+        # 1) 전체 영상 다운로드 (이미 있으면 스킵)
+        full_path = os.path.join(save_dir, "full_video.mp4")
+        if not os.path.exists(full_path):
+            ydl_opts = {
+                'format': 'best[ext=mp4][height<=720]/best[ext=mp4]/best',
+                'outtmpl': full_path,
+                'noplaylist': True,
+                'quiet': True,
+                'no_warnings': True,
+                'socket_timeout': 60,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([video_url])
+
+        if not os.path.exists(full_path):
+            return ""
+
+        # 2) ffmpeg로 클리핑
+        clip_path = os.path.join(save_dir, f"{filename}.mp4")
+        duration = end_sec - start_sec
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", str(start_sec),
+            "-i", full_path,
+            "-t", str(duration),
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-preset", "fast",
+            "-movflags", "+faststart",
+            clip_path,
+        ]
+        subprocess.run(cmd, capture_output=True, timeout=120)
+
+        if os.path.exists(clip_path) and os.path.getsize(clip_path) > 1000:
+            return clip_path
+    except Exception:
+        pass
+    return ""
+
+
+def search_youtube_interviews(query: str, max_results: int = 10) -> list:
+    """YouTube에서 크립토 인터뷰 영상 검색 (RSS 기반)"""
+    results = []
+    try:
+        search_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query)}&sp=CAISBAgCEAE"  # 이번 주 + 영상
+        # YouTube RSS로 검색 (Google News RSS 활용)
+        rss_url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}+site:youtube.com+when:7d&hl=en-US&gl=US&ceid=US:en"
+        feed = feedparser.parse(rss_url)
+
+        for entry in feed.entries[:max_results]:
+            link = entry.get("link", "")
+            title = clean_text(entry.get("title", ""))
+            published = entry.get("published", "")
+
+            # YouTube 링크 추출
+            yt_url = ""
+            if "youtube.com" in link:
+                yt_url = link
+            elif entry.get("links"):
+                for l in entry["links"]:
+                    href = l.get("href", "")
+                    if "youtube.com" in href:
+                        yt_url = href
+                        break
+
+            # Google News 리다이렉트에서 실제 URL 추출
+            if not yt_url and "news.google.com" in link:
+                try:
+                    resp = requests.head(link, allow_redirects=True, timeout=5)
+                    if "youtube.com" in resp.url:
+                        yt_url = resp.url
+                except Exception:
+                    pass
+
+            if yt_url:
+                results.append({
+                    "title": title,
+                    "url": yt_url,
+                    "published": published,
+                })
+
+        # 추가: 직접 YouTube RSS 검색
+        if len(results) < 3:
+            yt_rss = f"https://www.youtube.com/feeds/videos.xml?search_query={urllib.parse.quote(query)}"
+            feed2 = feedparser.parse(yt_rss)
+            for entry in feed2.entries[:5]:
+                link = entry.get("link", "")
+                title = clean_text(entry.get("title", ""))
+                if link and link not in [r["url"] for r in results]:
+                    results.append({
+                        "title": title,
+                        "url": link,
+                        "published": entry.get("published", ""),
+                    })
+
+    except Exception:
+        pass
+    return results
+
+
 def quick_translate_title(title_en: str, is_korean: bool = False) -> str:
     """제목만 빠르게 한글 번역 (미리보기용, Google Translate)"""
     if is_korean or not title_en:
@@ -2704,7 +3076,7 @@ with st.sidebar:
 # ════════════════════════════════════
 st.markdown("## 📡 STEP 1: 뉴스 수집")
 
-news_tab_crypto, news_tab_tesla = st.tabs(["🪙 크립토 뉴스", "🚗 테슬라 뉴스"])
+news_tab_crypto, news_tab_tesla, news_tab_clip = st.tabs(["🪙 크립토 뉴스", "🚗 테슬라 뉴스", "🎬 인터뷰 클리핑"])
 
 with news_tab_crypto:
     collect_btn = st.button("📡 크립토 뉴스 수집", type="primary", use_container_width=True, key="collect_crypto")
@@ -2857,6 +3229,200 @@ with news_tab_tesla:
             st.session_state["news_mode"] = "tesla"
             st.session_state["generated_posts"] = {}
         st.success(f"🚗 테슬라 뉴스 수집 완료! {len(top_tesla)}개 기사 준비됨")
+
+
+# ════════════════════════════════════
+#  인터뷰 클리핑 탭 (BitcoinSapiens 스타일)
+# ════════════════════════════════════
+with news_tab_clip:
+    st.markdown("**🎬 YouTube 인터뷰에서 핵심 발언을 찾아 X 포스트 + 영상 클립을 생성합니다.**")
+    st.caption("@BitcoinSapiens 스타일: 인터뷰 클립 + 한국어 번역 텍스트")
+
+    clip_mode = st.radio(
+        "모드 선택",
+        ["🔗 URL 직접 입력", "🔍 자동 검색"],
+        index=0,
+        key="clip_mode",
+        horizontal=True,
+    )
+
+    if clip_mode == "🔗 URL 직접 입력":
+        video_url_input = st.text_input(
+            "YouTube 영상 URL",
+            placeholder="https://www.youtube.com/watch?v=...",
+            key="clip_url_input",
+        )
+
+        if st.button("🎬 자막 추출 & 분석 시작", type="primary", use_container_width=True, key="start_clip"):
+            if not video_url_input:
+                st.error("YouTube URL을 입력해주세요!")
+            elif not claude_api_key:
+                st.error("사이드바에서 Claude API 키를 먼저 입력해주세요!")
+            else:
+                with st.spinner("📝 자막 추출 중..."):
+                    sub_result = extract_youtube_subtitles(video_url_input)
+
+                if sub_result.get("error"):
+                    st.error(f"❌ {sub_result['error']}")
+                else:
+                    st.session_state["clip_subtitles"] = sub_result
+                    st.session_state["clip_video_url"] = video_url_input
+                    st.success(f"✅ 자막 추출 완료! ({sub_result['lang']}) — {len(sub_result['segments'])}개 세그먼트")
+
+                    # 영상 정보 표시
+                    if sub_result.get("thumbnail"):
+                        st.image(sub_result["thumbnail"], use_container_width=True)
+                    st.markdown(f"**{sub_result.get('title', '')}**")
+                    st.caption(f"채널: {sub_result.get('channel', '')} | 길이: {_sec_to_hms(sub_result.get('duration', 0))}")
+
+                    # Claude로 핵심 발언 분석
+                    with st.spinner("🤖 Claude가 핵심 발언을 찾고 있습니다..."):
+                        quotes = find_quotable_moments_with_claude(
+                            api_key=claude_api_key,
+                            video_title=sub_result["title"],
+                            subtitle_text=sub_result["full_text"],
+                            model=claude_model,
+                            num_quotes=5,
+                        )
+                    st.session_state["clip_quotes"] = quotes
+                    st.success(f"🔥 {len(quotes)}개 핵심 발언 발견!")
+
+    else:  # 🔍 자동 검색
+        st.markdown("**크립토/테슬라 VIP 인물의 최신 인터뷰를 자동 검색합니다.**")
+
+        search_presets = {
+            "🔥 Michael Saylor 인터뷰": "Michael Saylor bitcoin interview 2026",
+            "⚡ Elon Musk 인터뷰": "Elon Musk interview crypto tesla 2026",
+            "📊 Cathie Wood 인터뷰": "Cathie Wood ARK bitcoin interview 2026",
+            "💰 Larry Fink 인터뷰": "Larry Fink BlackRock bitcoin ETF interview",
+            "🏛️ 비트코인 컨퍼런스": "bitcoin conference keynote speech 2026",
+            "📈 CNBC 크립토 인터뷰": "CNBC bitcoin crypto interview",
+            "🚗 테슬라 인터뷰": "Tesla Elon Musk interview robotaxi FSD 2026",
+        }
+
+        selected_preset = st.selectbox(
+            "검색 프리셋",
+            list(search_presets.keys()),
+            key="clip_search_preset",
+        )
+        custom_query = st.text_input(
+            "직접 검색어 (선택)",
+            placeholder="검색어를 입력하면 프리셋 대신 사용",
+            key="clip_custom_query",
+        )
+
+        if st.button("🔍 인터뷰 검색", type="primary", use_container_width=True, key="search_interviews"):
+            query = custom_query if custom_query else search_presets[selected_preset]
+            with st.spinner(f"🔍 '{query}' 검색 중..."):
+                results = search_youtube_interviews(query, max_results=10)
+
+            if results:
+                st.session_state["clip_search_results"] = results
+                st.success(f"✅ {len(results)}개 영상 발견!")
+            else:
+                st.warning("검색 결과가 없습니다. 다른 검색어를 시도해보세요.")
+
+        # 검색 결과 표시
+        if st.session_state.get("clip_search_results"):
+            st.markdown("### 📋 검색 결과 — 분석할 영상을 선택하세요")
+            for idx, result in enumerate(st.session_state["clip_search_results"]):
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.markdown(f"**{idx+1}.** {result['title']}")
+                    st.caption(result.get("published", ""))
+                with col2:
+                    if st.button("분석", key=f"analyze_{idx}"):
+                        if not claude_api_key:
+                            st.error("Claude API 키를 입력해주세요!")
+                        else:
+                            with st.spinner("📝 자막 추출 중..."):
+                                sub_result = extract_youtube_subtitles(result["url"])
+                            if sub_result.get("error"):
+                                st.error(f"❌ {sub_result['error']}")
+                            else:
+                                st.session_state["clip_subtitles"] = sub_result
+                                st.session_state["clip_video_url"] = result["url"]
+
+                                with st.spinner("🤖 Claude가 핵심 발언 분석 중..."):
+                                    quotes = find_quotable_moments_with_claude(
+                                        api_key=claude_api_key,
+                                        video_title=sub_result["title"],
+                                        subtitle_text=sub_result["full_text"],
+                                        model=claude_model,
+                                        num_quotes=5,
+                                    )
+                                st.session_state["clip_quotes"] = quotes
+                                st.success(f"✅ 자막 추출 + 핵심 발언 {len(quotes)}개 발견!")
+
+    # ── 핵심 발언 결과 표시 & 클리핑 ──
+    if st.session_state.get("clip_quotes"):
+        quotes = st.session_state["clip_quotes"]
+        sub_data = st.session_state.get("clip_subtitles", {})
+        video_url = st.session_state.get("clip_video_url", "")
+
+        st.markdown("---")
+        st.markdown("### 🔥 핵심 발언 — X 포스트 + 영상 클립")
+
+        for qi, quote in enumerate(quotes):
+            with st.expander(
+                f"💬 {quote.get('speaker', '발언자')}: {quote.get('korean', '')[:50]}...",
+                expanded=(qi == 0)
+            ):
+                # 발언 정보
+                st.markdown(f"**🗣️ 발언자:** {quote.get('speaker', '알 수 없음')}")
+                st.markdown(f"**🇺🇸 원문:** \"{quote.get('original', '')}\"")
+                st.markdown(f"**🇰🇷 번역:** \"{quote.get('korean', '')}\"")
+                st.markdown(f"**💡 포인트:** {quote.get('hook', '')}")
+
+                st.markdown("---")
+
+                # X 포스트 텍스트
+                post_text = quote.get("post_text", "")
+                st.markdown("**📝 X 포스트 텍스트:**")
+                st.markdown(f"""<div class="x-preview">{post_text}</div>""", unsafe_allow_html=True)
+                st.code(post_text, language=None)
+
+                # 타임스탬프 찾기
+                segments = sub_data.get("segments", [])
+                if segments and quote.get("original"):
+                    start, end = find_timestamp_for_quote(segments, quote["original"])
+                    if start > 0 or end > 0:
+                        st.caption(f"⏱️ 예상 구간: {_sec_to_hms(start)} ~ {_sec_to_hms(end)}")
+
+                        # 영상 클리핑
+                        if st.button(f"🎬 이 구간 영상 클리핑 ({_sec_to_hms(start)}~{_sec_to_hms(end)})", key=f"clip_{qi}"):
+                            with st.spinner(f"🎬 영상 다운로드 & 클리핑 중... (시간이 좀 걸릴 수 있습니다)"):
+                                clip_dir = os.path.join(DEFAULT_OUTPUT_DIR, "클립")
+                                safe_name = re.sub(r'[^\w]', '', quote.get("speaker", "clip"))[:20]
+                                clip_path = clip_video_with_ffmpeg(
+                                    video_url, start, end,
+                                    clip_dir, f"clip_{qi}_{safe_name}"
+                                )
+                            if clip_path and os.path.exists(clip_path):
+                                with open(clip_path, "rb") as vf:
+                                    video_bytes = vf.read()
+                                st.video(video_bytes)
+                                st.download_button(
+                                    label=f"📱 클립 다운로드 ({_sec_to_hms(start)}~{_sec_to_hms(end)})",
+                                    data=video_bytes,
+                                    file_name=f"clip_{safe_name}.mp4",
+                                    mime="video/mp4",
+                                    key=f"dl_clip_{qi}",
+                                )
+                                st.success("✅ 클리핑 완료! 위 버튼으로 다운로드하세요.")
+                            else:
+                                st.warning("클리핑 실패. Streamlit Cloud에서는 영상 다운로드가 제한될 수 있습니다.")
+                                st.markdown(f"**수동 클리핑:** YouTube에서 {_sec_to_hms(start)}~{_sec_to_hms(end)} 구간을 직접 녹화하세요.")
+
+                # 포스트 다운로드
+                dl_text = f"{post_text}\n\n─────────\n원문: \"{quote.get('original', '')}\"\n발언자: {quote.get('speaker', '')}"
+                st.download_button(
+                    label="💾 포스트 텍스트 저장",
+                    data=dl_text,
+                    file_name=f"post_{qi+1}_{quote.get('speaker', 'quote')}.txt",
+                    mime="text/plain",
+                    key=f"dl_post_{qi}",
+                )
 
 
 # ════════════════════════════════════
