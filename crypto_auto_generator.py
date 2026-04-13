@@ -91,14 +91,64 @@ KOREAN_FEEDS = {"🇰🇷 블록미디어", "🇰🇷 디지털투데이", "🇰
 #  테슬라/주식 RSS 피드
 # ─────────────────────────────────────────────
 TESLA_RSS_FEEDS = {
+    # ── 테슬라 전문 미디어 ──
     "🚗 Electrek (Tesla)":     "https://electrek.co/feed/",
     "⚡ InsideEVs":             "https://insideevs.com/rss/make/tesla/",
     "📈 Teslarati":            "https://www.teslarati.com/feed/",
     "🤖 Tesla Oracle":         "https://teslaoracle.com/feed/",
     "📰 CleanTechnica":        "https://cleantechnica.com/feed/",
+    "🏭 Not a Tesla App":      "https://www.notateslaapp.com/feed/",
+    "🔋 Torque News (Tesla)":  "https://www.torquenews.com/rss.xml",
+    "🚘 AutoEvolution (Tesla)":"https://www.autoevolution.com/rss/rss.xml",
+    # ── 금융/투자 ──
     "💹 Yahoo Finance (TSLA)": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=TSLA&region=US&lang=en-US",
     "📊 Seeking Alpha (TSLA)": "https://seekingalpha.com/api/sa/combined/TSLA.xml",
-    "🏭 Not a Tesla App":      "https://www.notateslaapp.com/feed/",
+    "💰 Motley Fool (TSLA)":   "https://www.fool.com/feeds/index.aspx?id=tesla-motors&apikey=DEMOAPIKEY",
+    # ── 대형 테크 미디어 ──
+    "🖥️ The Verge (Tesla)":    "https://www.theverge.com/rss/tesla/index.xml",
+    "🔧 Ars Technica (Cars)":  "https://feeds.arstechnica.com/arstechnica/cars",
+    "📡 TechCrunch (Tesla)":   "https://techcrunch.com/tag/tesla/feed/",
+    # ── 유튜브 채널 (영상 소스) ──
+    "🎬 Tesla Daily (Rob Maurer)":   "https://www.youtube.com/feeds/videos.xml?channel_id=UCgC_JgJCGelGrjWePNNmoZg",
+    "🎬 Munro Live":                 "https://www.youtube.com/feeds/videos.xml?channel_id=UCj--iMtToRO_8cGGlRpLLzw",
+    "🎬 The Electric Viking":        "https://www.youtube.com/feeds/videos.xml?channel_id=UCorCfEbKObSMGsl0WZixgvg",
+    "🎬 Solving The Money Problem":  "https://www.youtube.com/feeds/videos.xml?channel_id=UCh-0T48JrvvmKDX_gDnZS9Q",
+    "🎬 Bjørn Nyland":               "https://www.youtube.com/feeds/videos.xml?channel_id=UCzz4CoEgSgWNs9ZAvRMhW2A",
+    "🎬 Ryan Shaw":                  "https://www.youtube.com/feeds/videos.xml?channel_id=UCn7RJAH3qGHOmgHNV8M5bAg",
+    "🎬 Out of Spec":                "https://www.youtube.com/feeds/videos.xml?channel_id=UCVk83SLz4cDkpfzJUbyAMjg",
+    "🎬 Hyperchange":                "https://www.youtube.com/feeds/videos.xml?channel_id=UC4DaS2TCIb3UVtTjMRaCuEA",
+    "🎬 Now You Know":               "https://www.youtube.com/feeds/videos.xml?channel_id=UCMFmGRNMrjbMGR4UaHof9OA",
+    "🎬 Dave Lee":                   "https://www.youtube.com/feeds/videos.xml?channel_id=UCqECaJ8Gagnn7YCbPEzWH6g",
+    "🎬 Meet Kevin":                 "https://www.youtube.com/feeds/videos.xml?channel_id=UCUvvj5lwue7PspotMDjk5UA",
+    "🎬 Dirty Tesla":                "https://www.youtube.com/feeds/videos.xml?channel_id=UCHqMn-2n_jKYBOGbFNh-UDQ",
+    "🎬 MKBHD":                      "https://www.youtube.com/feeds/videos.xml?channel_id=UCBJycsmduvYEL83R_U4JriQ",
+    "🎬 Warren Redlich":             "https://www.youtube.com/feeds/videos.xml?channel_id=UC0DN4m-Oy0WQDyNoYRNqz6A",
+}
+
+# ── 테슬라 인플루언서 (Google News RSS) ──
+TESLA_X_INFLUENCERS = {
+    # VIP — 테슬라 핵심 인물
+    "⭐ Elon Musk (Tesla)":        "Elon+Musk+Tesla+OR+TSLA+OR+cybertruck+OR+FSD",
+    "⭐ Ross Gerber":               "Ross+Gerber+Tesla+OR+TSLA",
+    "⭐ Gary Black (TSLA)":         "%22Gary+Black%22+Tesla+OR+TSLA",
+    "⭐ Cathie Wood (TSLA)":        "Cathie+Wood+Tesla+OR+TSLA+OR+ARK",
+    # 월스트리트 애널리스트
+    "📊 Dan Ives (Wedbush)":        "Dan+Ives+Tesla+OR+TSLA+Wedbush",
+    "📊 Adam Jonas (Morgan Stanley)":"Adam+Jonas+Tesla+OR+TSLA+Morgan+Stanley",
+    "📊 Gene Munster":              "Gene+Munster+Tesla+OR+TSLA",
+    # 테슬라 전문 인플루언서
+    "🔥 Sawyer Merritt":            "Sawyer+Merritt+Tesla+OR+TSLA",
+    "🔥 Whole Mars Catalog":        "%22Whole+Mars+Catalog%22+Tesla+OR+Elon",
+    "🔥 Tesla Owners SV":           "%22Tesla+Owners%22+Silicon+Valley+Tesla",
+    "🔥 Joe Tegtmeyer":             "Joe+Tegtmeyer+Tesla+OR+TSLA",
+    # 뉴스/속보 키워드
+    "🚨 Tesla 속보":                "Tesla+breaking+OR+recall+OR+crash+OR+FSD+OR+update",
+    "🚨 TSLA 실적":                 "Tesla+earnings+OR+delivery+OR+production+OR+revenue",
+    "🚨 Robotaxi/FSD":             "Tesla+robotaxi+OR+%22full+self+driving%22+OR+FSD+OR+autonomous",
+    "🚨 Cybertruck":                "cybertruck+delivery+OR+recall+OR+update+OR+review",
+    "🚨 Optimus/로봇":             "Tesla+Optimus+robot+OR+humanoid+OR+AI",
+    "🚨 Gigafactory":              "Tesla+gigafactory+OR+%22giga+Berlin%22+OR+%22giga+Texas%22+OR+%22giga+Shanghai%22",
+    "🚨 에너지/Megapack":          "Tesla+Megapack+OR+Powerwall+OR+energy+storage",
 }
 
 TESLA_KEYWORDS = [
@@ -1408,12 +1458,15 @@ def fetch_x_influencer(display_name: str, query: str, count: int = 5, max_days: 
 
 def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=None,
                    influencer_names: list = None, count_per_influencer: int = 3,
-                   feed_dict: dict = None, max_days: int = 3):
-    """모든 RSS 소스 + X 인플루언서에서 뉴스 수집. feed_dict로 커스텀 피드 사용 가능."""
+                   feed_dict: dict = None, max_days: int = 3,
+                   influencer_dict: dict = None):
+    """모든 RSS 소스 + X 인플루언서에서 뉴스 수집. feed_dict/influencer_dict로 커스텀 피드 사용 가능."""
     all_items = []
     influencer_names = influencer_names or []
     if feed_dict is None:
         feed_dict = RSS_FEEDS
+    if influencer_dict is None:
+        influencer_dict = X_INFLUENCERS
     total_steps = len(feed_names) + len(influencer_names)
     if total_steps == 0:
         return []
@@ -1493,7 +1546,7 @@ def fetch_all_news(feed_names: list, count_per_feed: int = 5, progress_callback=
         if progress_callback:
             progress_callback(step / total_steps, f"🐦 {display_name} 수집 중...")
 
-        handle = X_INFLUENCERS.get(display_name)
+        handle = influencer_dict.get(display_name)
         if not handle:
             continue
 
@@ -1556,6 +1609,30 @@ SOURCE_QUALITY = {
     "🇰🇷 블록미디어": 2,
     "🇰🇷 디지털투데이": 2,
     "🇰🇷 코인리더스": 3,
+    # ── 테슬라 소스 ──
+    "🚗 Electrek (Tesla)": 1,
+    "📈 Teslarati": 1,
+    "⚡ InsideEVs": 2,
+    "🏭 Not a Tesla App": 2,
+    "🤖 Tesla Oracle": 2,
+    "📰 CleanTechnica": 2,
+    "🔋 Torque News (Tesla)": 3,
+    "🚘 AutoEvolution (Tesla)": 3,
+    "💹 Yahoo Finance (TSLA)": 2,
+    "📊 Seeking Alpha (TSLA)": 2,
+    "💰 Motley Fool (TSLA)": 3,
+    "🖥️ The Verge (Tesla)": 1,
+    "🔧 Ars Technica (Cars)": 2,
+    "📡 TechCrunch (Tesla)": 1,
+    # 유튜브 (독점 영상 콘텐츠이므로 Tier 1~2)
+    "🎬 Tesla Daily (Rob Maurer)": 1,
+    "🎬 Munro Live": 1,
+    "🎬 Dave Lee": 1,
+    "🎬 Meet Kevin": 2,
+    "🎬 MKBHD": 1,
+    "🎬 The Electric Viking": 2,
+    "🎬 Bjørn Nyland": 2,
+    "🎬 Hyperchange": 2,
 }
 
 def get_source_quality(source_name: str) -> int:
@@ -2644,39 +2721,101 @@ with news_tab_crypto:
             st.success(f"🪙 크립토 뉴스 수집 완료! 상위 {len(top_news)}개 기사 준비됨")
 
 with news_tab_tesla:
-    st.markdown("**테슬라/EV 전문 RSS에서 최신 뉴스를 수집합니다.**")
-    tesla_feeds_list = list(TESLA_RSS_FEEDS.keys())
+    st.markdown("**테슬라/EV 전문 RSS + 유튜브 + 인플루언서에서 최신 뉴스를 수집합니다.**")
+
+    # ── 테슬라 소스 카테고리 선택 ──
+    tesla_feed_categories = {
+        "🚗 전문 미디어": [f for f in TESLA_RSS_FEEDS if not f.startswith("🎬") and not f.startswith("💹") and not f.startswith("📊 Seeking") and not f.startswith("💰") and not f.startswith("🖥") and not f.startswith("🔧") and not f.startswith("📡")],
+        "💰 금융/투자": [f for f in TESLA_RSS_FEEDS if any(f.startswith(p) for p in ["💹", "📊 Seeking", "💰"])],
+        "🖥️ 테크 미디어": [f for f in TESLA_RSS_FEEDS if any(f.startswith(p) for p in ["🖥", "🔧", "📡"])],
+        "🎬 유튜브 채널": [f for f in TESLA_RSS_FEEDS if f.startswith("🎬")],
+    }
+
+    tesla_source_mode = st.radio(
+        "테슬라 소스 모드",
+        ["⭐ 전체 선택 (추천)", "🎬 유튜브만", "🛠 수동 선택"],
+        index=0,
+        key="tesla_source_mode",
+        help="전체: 모든 RSS + 유튜브. 유튜브만: 영상 콘텐츠 위주"
+    )
+
+    tesla_feeds_list = []
+    if tesla_source_mode == "⭐ 전체 선택 (추천)":
+        tesla_feeds_list = list(TESLA_RSS_FEEDS.keys())
+    elif tesla_source_mode == "🎬 유튜브만":
+        tesla_feeds_list = [f for f in TESLA_RSS_FEEDS if f.startswith("🎬")]
+    else:
+        for cat_name, feeds in tesla_feed_categories.items():
+            with st.expander(f"{cat_name} ({len(feeds)}개)", expanded=False):
+                for feed in feeds:
+                    if st.checkbox(feed, value=True, key=f"tesla_feed_{feed}"):
+                        tesla_feeds_list.append(feed)
+
+    # ── 테슬라 인플루언서 선택 ──
+    st.markdown("---")
+    tesla_inf_categories = {
+        "⭐ VIP 인물": [inf for inf in TESLA_X_INFLUENCERS if inf.startswith("⭐")],
+        "📊 월스트리트 애널리스트": [inf for inf in TESLA_X_INFLUENCERS if inf.startswith("📊")],
+        "🔥 테슬라 인플루언서": [inf for inf in TESLA_X_INFLUENCERS if inf.startswith("🔥")],
+        "🚨 속보/키워드": [inf for inf in TESLA_X_INFLUENCERS if inf.startswith("🚨")],
+    }
+
+    tesla_inf_mode = st.radio(
+        "테슬라 인플루언서",
+        ["⭐ 전체 (추천)", "❌ 사용 안 함", "🛠 수동 선택"],
+        index=0,
+        key="tesla_inf_mode",
+        help="VIP 인물 + 애널리스트 + 속보 키워드"
+    )
+
+    tesla_inf_selected = []
+    if tesla_inf_mode == "⭐ 전체 (추천)":
+        tesla_inf_selected = list(TESLA_X_INFLUENCERS.keys())
+    elif tesla_inf_mode == "🛠 수동 선택":
+        for cat_name, infs in tesla_inf_categories.items():
+            with st.expander(f"{cat_name} ({len(infs)}개)", expanded=False):
+                for inf in infs:
+                    if st.checkbox(inf, value=True, key=f"tesla_inf_{inf}"):
+                        tesla_inf_selected.append(inf)
+
+    st.markdown("---")
     tesla_per_feed = st.slider("소스당 수집 수 (테슬라)", 3, 15, 8, key="tesla_per_feed")
+    tesla_inf_per = st.slider("인플루언서당 수집 수", 1, 10, 5, key="tesla_inf_per")
+
+    st.caption(f"📰 RSS/유튜브: **{len(tesla_feeds_list)}**개 | 🐦 인플루언서: **{len(tesla_inf_selected)}**개")
 
     collect_tesla_btn = st.button("🚗 테슬라 뉴스 수집", type="primary", use_container_width=True, key="collect_tesla")
 
     if collect_tesla_btn:
-        progress_bar_t = st.progress(0)
-        status_text_t = st.empty()
+        if not tesla_feeds_list and not tesla_inf_selected:
+            st.error("최소 1개 이상의 소스를 선택하세요!")
+        else:
+            progress_bar_t = st.progress(0)
+            status_text_t = st.empty()
 
-        def update_progress_t(pct, msg):
-            progress_bar_t.progress(pct)
-            status_text_t.text(msg)
+            def update_progress_t(pct, msg):
+                progress_bar_t.progress(pct)
+                status_text_t.text(msg)
 
-        # 테슬라 관련 인플루언서 (Elon Musk 등)
-        tesla_influencers = ["⭐ Elon Musk"]
-        tesla_inf_selected = [inf for inf in tesla_influencers if inf in X_INFLUENCERS]
+            all_tesla = fetch_all_news(
+                tesla_feeds_list, tesla_per_feed, update_progress_t,
+                influencer_names=tesla_inf_selected,
+                count_per_influencer=tesla_inf_per,
+                feed_dict=TESLA_RSS_FEEDS,
+                influencer_dict=TESLA_X_INFLUENCERS,
+            )
+            rss_count_t = sum(1 for n in all_tesla if not n["source"].startswith("🐦"))
+            x_count_t = sum(1 for n in all_tesla if n["source"].startswith("🐦"))
+            yt_count_t = sum(1 for n in all_tesla if "youtube" in n.get("link", "").lower())
+            status_text_t.text(f"총 {len(all_tesla)}개 수집 (RSS: {rss_count_t} / 인플루언서: {x_count_t} / 유튜브: {yt_count_t})")
 
-        all_tesla = fetch_all_news(
-            tesla_feeds_list, tesla_per_feed, update_progress_t,
-            influencer_names=tesla_inf_selected,
-            count_per_influencer=5,
-            feed_dict=TESLA_RSS_FEEDS
-        )
-        status_text_t.text(f"총 {len(all_tesla)}개 테슬라 뉴스 수집")
+            filtered_t = [n for n in all_tesla if n["score"]["total"] >= 0]
+            unique_tesla = deduplicate_news(filtered_t)
+            top_tesla = unique_tesla[:num_posts]
 
-        filtered_t = [n for n in all_tesla if n["score"]["total"] >= 0]
-        unique_tesla = deduplicate_news(filtered_t)
-        top_tesla = unique_tesla[:num_posts]
-
-        st.session_state["collected_news"] = top_tesla
-        st.session_state["news_mode"] = "tesla"
-        st.session_state["generated_posts"] = {}
+            st.session_state["collected_news"] = top_tesla
+            st.session_state["news_mode"] = "tesla"
+            st.session_state["generated_posts"] = {}
         st.success(f"🚗 테슬라 뉴스 수집 완료! {len(top_tesla)}개 기사 준비됨")
 
 
