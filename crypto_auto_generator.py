@@ -2113,7 +2113,139 @@ st.markdown("""
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
     /* ── 전체 테마 ── */
-    .stApp { background-color: #0e1117; }
+    .stApp {
+        background-color: #0e1117;
+        color: #e0e0e0;
+    }
+
+    /* ── Streamlit 위젯 글씨 가시성 (다크 테마) ── */
+
+    /* 사이드바 전체 */
+    section[data-testid="stSidebar"] {
+        background-color: #0e1117;
+        color: #e0e0e0;
+    }
+    section[data-testid="stSidebar"] .stMarkdown,
+    section[data-testid="stSidebar"] .stMarkdown p,
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] .stRadio label,
+    section[data-testid="stSidebar"] span,
+    section[data-testid="stSidebar"] .stCheckbox label span {
+        color: #e0e0e0 !important;
+    }
+
+    /* 모든 label / caption / markdown 텍스트 */
+    .stMarkdown, .stMarkdown p, .stMarkdown li,
+    .stCaption, label,
+    .stTextInput label, .stSelectbox label,
+    .stRadio label, .stSlider label,
+    .stNumberInput label, .stCheckbox label,
+    .stMultiSelect label, .stTextArea label,
+    .stTabs [data-baseweb="tab"] {
+        color: #e0e0e0 !important;
+    }
+
+    /* selectbox 내부 텍스트 + 배경 */
+    .stSelectbox [data-baseweb="select"],
+    .stSelectbox [data-baseweb="select"] *,
+    .stMultiSelect [data-baseweb="select"],
+    .stMultiSelect [data-baseweb="select"] * {
+        color: #e0e0e0 !important;
+        background-color: #1a1a2e !important;
+    }
+
+    /* text_input, number_input, textarea 내부 */
+    .stTextInput input, .stNumberInput input, .stTextArea textarea {
+        color: #e0e0e0 !important;
+        background-color: #1a1a2e !important;
+        border: 1px solid #333 !important;
+    }
+    .stTextInput input::placeholder, .stTextArea textarea::placeholder {
+        color: #888 !important;
+    }
+
+    /* 드롭다운 팝오버 (열렸을 때 목록) */
+    [data-baseweb="popover"],
+    [data-baseweb="menu"],
+    [data-baseweb="popover"] ul,
+    [data-baseweb="menu"] ul {
+        background-color: #1a1a2e !important;
+    }
+    [data-baseweb="popover"] li,
+    [data-baseweb="menu"] li,
+    [data-baseweb="popover"] li *,
+    [data-baseweb="menu"] li * {
+        color: #e0e0e0 !important;
+        background-color: #1a1a2e !important;
+    }
+    [data-baseweb="popover"] li:hover,
+    [data-baseweb="menu"] li:hover {
+        background-color: #2a2a4e !important;
+    }
+
+    /* Radio 버튼 */
+    .stRadio > div[role="radiogroup"] label,
+    .stRadio > div[role="radiogroup"] label div {
+        color: #e0e0e0 !important;
+    }
+
+    /* Checkbox 텍스트 */
+    .stCheckbox label span[data-testid="stMarkdownContainer"],
+    .stCheckbox label span[data-testid="stMarkdownContainer"] p {
+        color: #e0e0e0 !important;
+    }
+
+    /* 슬라이더 값 표시 */
+    .stSlider [data-testid="stTickBarMin"],
+    .stSlider [data-testid="stTickBarMax"],
+    .stSlider [data-baseweb="slider"] div,
+    .stSlider > div > div > div > div {
+        color: #e0e0e0 !important;
+    }
+
+    /* Expander 헤더 */
+    .streamlit-expanderHeader,
+    details summary,
+    details summary span,
+    [data-testid="stExpander"] summary span {
+        color: #e0e0e0 !important;
+    }
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] button {
+        color: #aaa !important;
+    }
+    .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
+        color: #e94560 !important;
+    }
+
+    /* 버튼 기본 스타일 */
+    .stButton > button {
+        color: #fff !important;
+    }
+    .stButton > button[kind="primary"] {
+        background-color: #e94560 !important;
+        border: none !important;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background-color: #d63a55 !important;
+    }
+
+    /* st.warning / st.error / st.success / st.info 텍스트 */
+    .stAlert p, .stAlert span {
+        color: #1a1a2e !important;
+    }
+
+    /* download 버튼 */
+    .stDownloadButton > button {
+        color: #e0e0e0 !important;
+        border: 1px solid #333 !important;
+    }
+
+    /* st.caption */
+    .stCaption, [data-testid="stCaptionContainer"] {
+        color: #888 !important;
+    }
 
     /* ── 모바일 반응형 ── */
     @media (max-width: 768px) {
