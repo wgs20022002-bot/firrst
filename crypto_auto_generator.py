@@ -2553,15 +2553,25 @@ with st.sidebar:
                     checked = st.checkbox(feed, value=False, key=f"feed_{feed}")
                     if checked:
                         selected_feeds.append(feed)
-    else:
+    else:  # 🛠 수동 선택
         for cat_name, feeds in feed_categories.items():
+            valid_feeds = [f for f in feeds if f in RSS_FEEDS]
+            if not valid_feeds:
+                continue
+            cat_key = f"manual_feed_cat_{cat_name}"
+            prev_key = f"_prev_{cat_key}"
+            cat_checked = st.checkbox(f"**{cat_name}** ({len(valid_feeds)}개)", value=True, key=cat_key)
+            prev_val = st.session_state.get(prev_key, None)
+            if prev_val is not None and prev_val != cat_checked:
+                for feed in valid_feeds:
+                    st.session_state[f"feed_{feed}"] = cat_checked
+            st.session_state[prev_key] = cat_checked
             with st.expander(cat_name, expanded=False):
-                for feed in feeds:
-                    if feed in RSS_FEEDS:
-                        default_on = feed in RECOMMENDED_FEEDS
-                        checked = st.checkbox(feed, value=default_on, key=f"feed_{feed}")
-                        if checked:
-                            selected_feeds.append(feed)
+                for feed in valid_feeds:
+                    default_on = feed in RECOMMENDED_FEEDS if cat_checked else False
+                    checked = st.checkbox(feed, value=default_on, key=f"feed_{feed}")
+                    if checked:
+                        selected_feeds.append(feed)
 
     st.markdown("---")
     st.markdown("### 🐦 X 인플루언서 소스")
@@ -2636,15 +2646,25 @@ with st.sidebar:
                     checked = st.checkbox(inf, value=False, key=f"inf_{inf}")
                     if checked:
                         selected_influencers.append(inf)
-    else:
+    else:  # 🛠 수동 선택
         for cat_name, influencers in influencer_categories.items():
+            valid_infs = [inf for inf in influencers if inf in X_INFLUENCERS]
+            if not valid_infs:
+                continue
+            cat_key = f"manual_inf_cat_{cat_name}"
+            prev_key = f"_prev_{cat_key}"
+            cat_checked = st.checkbox(f"**{cat_name}** ({len(valid_infs)}개)", value=True, key=cat_key)
+            prev_val = st.session_state.get(prev_key, None)
+            if prev_val is not None and prev_val != cat_checked:
+                for inf in valid_infs:
+                    st.session_state[f"inf_{inf}"] = cat_checked
+            st.session_state[prev_key] = cat_checked
             with st.expander(cat_name, expanded=False):
-                for inf in influencers:
-                    if inf in X_INFLUENCERS:
-                        default_on = inf in RECOMMENDED_INFLUENCERS
-                        checked = st.checkbox(inf, value=default_on, key=f"inf_{inf}")
-                        if checked:
-                            selected_influencers.append(inf)
+                for inf in valid_infs:
+                    default_on = inf in RECOMMENDED_INFLUENCERS if cat_checked else False
+                    checked = st.checkbox(inf, value=default_on, key=f"inf_{inf}")
+                    if checked:
+                        selected_influencers.append(inf)
 
     st.markdown("---")
     st.markdown("### 🎯 생성 설정")
@@ -2744,9 +2764,19 @@ with news_tab_tesla:
         tesla_feeds_list = list(TESLA_RSS_FEEDS.keys())
     elif tesla_source_mode == "🎬 유튜브만":
         tesla_feeds_list = [f for f in TESLA_RSS_FEEDS if f.startswith("🎬")]
-    else:
+    else:  # 🛠 수동 선택
         for cat_name, feeds in tesla_feed_categories.items():
-            with st.expander(f"{cat_name} ({len(feeds)}개)", expanded=False):
+            if not feeds:
+                continue
+            cat_key = f"tesla_feed_cat_{cat_name}"
+            prev_key = f"_prev_{cat_key}"
+            cat_checked = st.checkbox(f"**{cat_name}** ({len(feeds)}개)", value=True, key=cat_key)
+            prev_val = st.session_state.get(prev_key, None)
+            if prev_val is not None and prev_val != cat_checked:
+                for feed in feeds:
+                    st.session_state[f"tesla_feed_{feed}"] = cat_checked
+            st.session_state[prev_key] = cat_checked
+            with st.expander(cat_name, expanded=False):
                 for feed in feeds:
                     if st.checkbox(feed, value=True, key=f"tesla_feed_{feed}"):
                         tesla_feeds_list.append(feed)
@@ -2773,7 +2803,17 @@ with news_tab_tesla:
         tesla_inf_selected = list(TESLA_X_INFLUENCERS.keys())
     elif tesla_inf_mode == "🛠 수동 선택":
         for cat_name, infs in tesla_inf_categories.items():
-            with st.expander(f"{cat_name} ({len(infs)}개)", expanded=False):
+            if not infs:
+                continue
+            cat_key = f"tesla_inf_cat_{cat_name}"
+            prev_key = f"_prev_{cat_key}"
+            cat_checked = st.checkbox(f"**{cat_name}** ({len(infs)}개)", value=True, key=cat_key)
+            prev_val = st.session_state.get(prev_key, None)
+            if prev_val is not None and prev_val != cat_checked:
+                for inf in infs:
+                    st.session_state[f"tesla_inf_{inf}"] = cat_checked
+            st.session_state[prev_key] = cat_checked
+            with st.expander(cat_name, expanded=False):
                 for inf in infs:
                     if st.checkbox(inf, value=True, key=f"tesla_inf_{inf}"):
                         tesla_inf_selected.append(inf)
