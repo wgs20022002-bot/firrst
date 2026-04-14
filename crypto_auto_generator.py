@@ -1483,19 +1483,45 @@ def _get_youtube_video_id(url: str) -> str:
 
 
 def clip_video_with_ffmpeg(video_url: str, start_sec: float, end_sec: float,
-                           save_dir: str, filename: str = "clip") -> tuple:
+                           save_dir: str, filename: str = "clip",
+                           local_source_path: str = "") -> tuple:
     """
-    yt-dlp로 **스트림 URL만 얻어서** ffmpeg가 필요한 구간만 스트리밍해서 클리핑.
-    전체 영상을 다운로드하지 않으므로 Streamlit Cloud에서도 작동 가능.
+    영상 클리핑.
+    - local_source_path가 제공되면 그 로컬 파일에서 자름 (100% 작동)
+    - 아니면 yt-dlp로 스트림 URL 추출 후 ffmpeg로 구간만 스트리밍 클리핑
     반환: (clip_path, error_message)
     """
     error = ""
     try:
-        import yt_dlp
         import subprocess
-
         os.makedirs(save_dir, exist_ok=True)
         clip_path = os.path.join(save_dir, f"{filename}.mp4")
+        duration = max(1.0, float(end_sec) - float(start_sec))
+
+        # ═══ A) 업로드된 로컬 영상 파일 사용 (최우선) ═══
+        if local_source_path and os.path.exists(local_source_path):
+            cmd = [
+                "ffmpeg", "-y",
+                "-ss", str(max(0, start_sec - 0.3)),
+                "-i", local_source_path,
+                "-t", str(duration + 0.6),
+                "-c:v", "libx264",
+                "-c:a", "aac",
+                "-preset", "veryfast",
+                "-crf", "23",
+                "-movflags", "+faststart",
+                "-loglevel", "error",
+                clip_path,
+            ]
+            proc = subprocess.run(cmd, capture_output=True, timeout=120)
+            if proc.returncode != 0:
+                error = f"ffmpeg(로컬) 실패: {proc.stderr.decode('utf-8', errors='ignore')[:200]}"
+            if os.path.exists(clip_path) and os.path.getsize(clip_path) > 1000:
+                return clip_path, ""
+            return "", (error or "로컬 클리핑 실패")
+
+        # ═══ B) yt-dlp 스트림 URL 추출 방식 ═══
+        import yt_dlp
 
         # 1) yt-dlp로 직접 스트림 URL 추출 (다운로드 X)
         ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -2825,9 +2851,66 @@ st.markdown("""
         background-color: #d63a55 !important;
     }
 
-    /* st.warning / st.error / st.success / st.info 텍스트 */
-    .stAlert p, .stAlert span {
-        color: #1a1a2e !important;
+    /* ── st.success / st.info / st.warning / st.error 알림 박스 ── */
+    /* 공통: 모든 알림 박스 내부 텍스트를 밝은 색으로 */
+    .stAlert, [data-testid="stAlert"],
+    [data-testid^="stNotification"], [data-baseweb="notification"] {
+        color: #ffffff !important;
+    }
+    .stAlert *, [data-testid="stAlert"] *,
+    [data-testid^="stNotification"] *, [data-baseweb="notification"] *,
+    .stAlert p, .stAlert span, .stAlert div, .stAlert li,
+    .stAlert strong, .stAlert em, .stAlert code, .stAlert a {
+        color: #ffffff !important;
+        opacity: 1 !important;
+    }
+    /* success (초록) - 배경을 살짝 진하게, 텍스트는 밝은 초록/흰색 */
+    [data-testid="stAlert"][class*="success"],
+    [data-baseweb="notification"][kind="positive"],
+    div[data-testid="stNotificationContentSuccess"] {
+        background-color: #1e3a2a !important;
+        border: 1px solid #2ecc71 !important;
+    }
+    [data-testid="stAlert"][class*="success"] *,
+    [data-baseweb="notification"][kind="positive"] *,
+    div[data-testid="stNotificationContentSuccess"] * {
+        color: #d1fae5 !important;
+    }
+    /* info (파랑) */
+    [data-testid="stAlert"][class*="info"],
+    [data-baseweb="notification"][kind="info"],
+    div[data-testid="stNotificationContentInfo"] {
+        background-color: #1e2a3a !important;
+        border: 1px solid #3498db !important;
+    }
+    [data-testid="stAlert"][class*="info"] *,
+    [data-baseweb="notification"][kind="info"] *,
+    div[data-testid="stNotificationContentInfo"] * {
+        color: #dbeafe !important;
+    }
+    /* warning (노랑) */
+    [data-testid="stAlert"][class*="warning"],
+    [data-baseweb="notification"][kind="warning"],
+    div[data-testid="stNotificationContentWarning"] {
+        background-color: #3a2f1e !important;
+        border: 1px solid #f39c12 !important;
+    }
+    [data-testid="stAlert"][class*="warning"] *,
+    [data-baseweb="notification"][kind="warning"] *,
+    div[data-testid="stNotificationContentWarning"] * {
+        color: #fef3c7 !important;
+    }
+    /* error (빨강) */
+    [data-testid="stAlert"][class*="error"],
+    [data-baseweb="notification"][kind="negative"],
+    div[data-testid="stNotificationContentError"] {
+        background-color: #3a1e1e !important;
+        border: 1px solid #e74c3c !important;
+    }
+    [data-testid="stAlert"][class*="error"] *,
+    [data-baseweb="notification"][kind="negative"] *,
+    div[data-testid="stNotificationContentError"] * {
+        color: #fee2e2 !important;
     }
 
     /* download 버튼 */
@@ -3383,6 +3466,37 @@ with news_tab_clip:
     st.markdown("**🎬 YouTube 인터뷰에서 핵심 발언을 찾아 X 포스트 + 영상 클립을 생성합니다.**")
     st.caption("@BitcoinSapiens 스타일: 인터뷰 클립 + 한국어 번역 텍스트")
 
+    # ── 원본 영상 파일 업로드 (선택) ──
+    # Streamlit Cloud는 YouTube 봇 차단으로 스트리밍 다운로드가 자주 실패함.
+    # 사용자가 로컬에서 받은 MP4를 업로드하면 100% 클리핑 가능.
+    with st.expander("⚡ **클리핑이 안 되면? 원본 영상 업로드** (권장)", expanded=False):
+        st.markdown(
+            "Streamlit Cloud는 YouTube가 봇으로 차단하는 경우가 많아요.\n\n"
+            "**해결책:** 로컬 PC에서 영상을 먼저 다운로드한 뒤 여기 업로드하세요.\n"
+            "1. https://yt1s.com / https://y2mate.com 등에서 영상 다운로드 (또는 로컬 yt-dlp)\n"
+            "2. 아래에 업로드 → 자막 분석 후 **자동으로 5개 구간 잘림**"
+        )
+        uploaded_video = st.file_uploader(
+            "원본 영상 파일 (MP4, MOV, MKV)",
+            type=["mp4", "mov", "mkv", "webm"],
+            key="uploaded_source_video",
+            help="업로드된 영상은 자막 타임스탬프에 따라 자동 클리핑됩니다.",
+        )
+        if uploaded_video:
+            # 세션에 경로 저장
+            up_dir = os.path.join(DEFAULT_OUTPUT_DIR, "업로드")
+            os.makedirs(up_dir, exist_ok=True)
+            up_path = os.path.join(up_dir, f"source_{uploaded_video.name}")
+            with open(up_path, "wb") as f:
+                f.write(uploaded_video.getbuffer())
+            st.session_state["uploaded_video_path"] = up_path
+            size_mb = os.path.getsize(up_path) / 1024 / 1024
+            st.success(f"✅ 원본 영상 업로드 완료 ({size_mb:.1f} MB) — 이제 클리핑이 100% 작동합니다!")
+        elif st.session_state.get("uploaded_video_path"):
+            if st.button("🗑️ 업로드한 영상 초기화", key="clear_uploaded"):
+                st.session_state.pop("uploaded_video_path", None)
+                st.rerun()
+
     clip_mode = st.radio(
         "모드 선택",
         ["🔗 URL 직접 입력", "🔍 자동 검색"],
@@ -3519,6 +3633,149 @@ with news_tab_clip:
         st.markdown("---")
         st.markdown("### 🔥 핵심 발언 — X 포스트 + 영상 클립")
 
+        # ═══════════════════════════════════════════════════════════════
+        #  일괄 클리핑: 핵심 발언 N개 모두 MP4로 만들어서 ZIP으로 다운로드
+        # ═══════════════════════════════════════════════════════════════
+        col_batch1, col_batch2 = st.columns([3, 2])
+        with col_batch1:
+            batch_clip_btn = st.button(
+                f"🎬 핵심 발언 {len(quotes)}개 모두 클리핑 → ZIP 다운로드",
+                type="primary",
+                use_container_width=True,
+                key="batch_clip_all",
+            )
+        with col_batch2:
+            st.caption("⏱️ 예상 소요: 발언당 20~40초 (스트리밍 클리핑)")
+
+        if batch_clip_btn:
+            import zipfile
+            import io as _io
+
+            segments_all = sub_data.get("segments", [])
+            clip_dir = os.path.join(DEFAULT_OUTPUT_DIR, "클립_일괄")
+            os.makedirs(clip_dir, exist_ok=True)
+
+            progress = st.progress(0.0, text="🎬 일괄 클리핑 시작...")
+            status = st.empty()
+            clip_results = []  # [(filename, bytes, post_text, ok, err)]
+
+            for idx, q in enumerate(quotes):
+                speaker = q.get("speaker", "speaker")
+                safe_name = re.sub(r'[^\w]', '', speaker)[:20] or f"quote{idx+1}"
+                progress.progress(
+                    (idx) / max(1, len(quotes)),
+                    text=f"[{idx+1}/{len(quotes)}] {speaker} 구간 클리핑 중..."
+                )
+
+                # 타임스탬프 찾기
+                start, end = 0.0, 0.0
+                if segments_all and q.get("original"):
+                    start, end = find_timestamp_for_quote(segments_all, q["original"])
+
+                if (start > 0 or end > 0) and end > start:
+                    clip_path, err = clip_video_with_ffmpeg(
+                        video_url, start, end,
+                        clip_dir, f"clip_{idx+1}_{safe_name}",
+                        local_source_path=st.session_state.get("uploaded_video_path", ""),
+                    )
+                    if clip_path and os.path.exists(clip_path):
+                        with open(clip_path, "rb") as f:
+                            clip_results.append((
+                                f"clip_{idx+1}_{safe_name}.mp4",
+                                f.read(),
+                                q.get("post_text", ""),
+                                True, ""
+                            ))
+                    else:
+                        clip_results.append((
+                            f"clip_{idx+1}_{safe_name}.mp4",
+                            b"", q.get("post_text", ""), False, err
+                        ))
+                else:
+                    clip_results.append((
+                        f"clip_{idx+1}_{safe_name}.mp4",
+                        b"", q.get("post_text", ""), False, "타임스탬프 미발견"
+                    ))
+
+            progress.progress(1.0, text="📦 ZIP 패키징 중...")
+
+            # ZIP 만들기 (성공 영상 + 모든 포스트 텍스트 + 실패 로그)
+            zip_buf = _io.BytesIO()
+            success_count = 0
+            fail_log = []
+            with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                for i, (fname, data, post, ok, err) in enumerate(clip_results):
+                    if ok and data:
+                        zf.writestr(f"videos/{fname}", data)
+                        success_count += 1
+                    else:
+                        fail_log.append(f"[{i+1}] {fname}: {err}")
+                    # 포스트 텍스트도 같이 (성공/실패 무관)
+                    if post:
+                        txt_name = fname.replace(".mp4", ".txt")
+                        zf.writestr(f"posts/{txt_name}", post)
+                # README
+                readme = (
+                    f"# 인터뷰 클립 일괄 다운로드\n\n"
+                    f"- 원본 영상: {video_url}\n"
+                    f"- 총 발언: {len(quotes)}개\n"
+                    f"- 성공: {success_count}개\n"
+                    f"- 실패: {len(fail_log)}개\n\n"
+                )
+                if fail_log:
+                    readme += "## 실패 목록\n" + "\n".join(fail_log) + "\n"
+                zf.writestr("README.txt", readme)
+
+            zip_bytes = zip_buf.getvalue()
+            progress.empty()
+
+            if success_count > 0:
+                status.success(f"✅ {success_count}/{len(quotes)}개 클립 생성 완료!")
+            else:
+                status.warning(
+                    "⚠️ MP4 클립 생성에 실패했지만, 포스트 텍스트는 ZIP에 포함되어 있습니다. "
+                    "Streamlit Cloud의 YouTube 차단 때문일 수 있어요."
+                )
+
+            if fail_log:
+                with st.expander(f"🔧 실패 {len(fail_log)}건 상세"):
+                    for line in fail_log:
+                        st.text(line)
+
+            st.download_button(
+                label=f"📦 ZIP 다운로드 ({success_count}개 영상 + {len(quotes)}개 포스트)",
+                data=zip_bytes,
+                file_name=f"interview_clips_{re.sub(r'[^w]', '', sub_data.get('title', 'clips'))[:30]}.zip",
+                mime="application/zip",
+                key="dl_batch_zip",
+                type="primary",
+                use_container_width=True,
+            )
+
+            # 결과를 세션에 저장해서 개별 다운로드 버튼을 다음 섹션에서 쓸 수 있게
+            st.session_state["batch_clip_results"] = clip_results
+
+        # ── 개별 클립 다운로드 (일괄 처리 후) ──
+        if st.session_state.get("batch_clip_results"):
+            st.markdown("#### 📥 개별 클립 다운로드")
+            br = st.session_state["batch_clip_results"]
+            cols = st.columns(min(5, len(br)))
+            for i, (fname, data, post, ok, err) in enumerate(br):
+                with cols[i % len(cols)]:
+                    if ok and data:
+                        st.download_button(
+                            label=f"📹 클립 {i+1}\n{fname[:20]}",
+                            data=data,
+                            file_name=fname,
+                            mime="video/mp4",
+                            key=f"dl_indiv_{i}",
+                            use_container_width=True,
+                        )
+                    else:
+                        st.caption(f"❌ 클립 {i+1} 실패\n{err[:30]}")
+
+        st.markdown("---")
+
         for qi, quote in enumerate(quotes):
             with st.expander(
                 f"💬 {quote.get('speaker', '발언자')}: {quote.get('korean', '')[:50]}...",
@@ -3569,7 +3826,8 @@ with news_tab_clip:
                                 safe_name = re.sub(r'[^\w]', '', quote.get("speaker", "clip"))[:20]
                                 clip_path, err_msg = clip_video_with_ffmpeg(
                                     video_url, start, end,
-                                    clip_dir, f"clip_{qi}_{safe_name}"
+                                    clip_dir, f"clip_{qi}_{safe_name}",
+                                    local_source_path=st.session_state.get("uploaded_video_path", ""),
                                 )
                             if clip_path and os.path.exists(clip_path):
                                 with open(clip_path, "rb") as vf:
