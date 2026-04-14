@@ -1726,6 +1726,296 @@ def _OLD_clip_video_with_ffmpeg_STREAMING(video_url: str, start_sec: float, end_
     return "", (error or "알 수 없는 오류")
 
 
+# ═══════════════════════════════════════════════════════════════
+#  최신 인터뷰 자동 집계 (RSS_FEEDS의 🎬 YouTube 채널 기반)
+# ═══════════════════════════════════════════════════════════════
+# 크립토 관련 영상만 걸러내기 위한 키워드 (제목/설명에서 매칭)
+_CRYPTO_KEYWORDS = [
+    # 핵심
+    "bitcoin", "btc", "crypto", "cryptocurrency", "블록체인", "blockchain",
+    "비트코인", "암호화폐",
+    # 주요 알트
+    "ethereum", "eth", "solana", "xrp", "doge", "altcoin",
+    # 인물/기업
+    "saylor", "microstrategy", "strategy", "coinbase", "binance", "gemini",
+    "tom lee", "fundstrat", "cathie wood", "ark invest",
+    "larry fink", "blackrock", "fidelity", "spot etf", "ibit",
+    "elon musk", "tesla bitcoin",
+    "trump", "jd vance", "lummis", "atkins sec", "white house crypto",
+    "lawrence lepard", "nigel farage", "samson mow", "adam back",
+    "max keiser", "lyn alden", "preston pysh", "peter mccormack",
+    "anthony pompliano", "pomp", "raoul pal",
+    # 주제
+    "mining", "miner", "hashrate", "halving", "on-chain", "onchain",
+    "stablecoin", "tether", "usdc", "defi", "wallet", "custody",
+    "etf", "strategic reserve", "digital asset", "spot bitcoin",
+    "fed rate", "inflation bitcoin", "gold bitcoin",
+    # 테슬라는 별도 탭이지만, 핵심 크립토 연관만 포함
+]
+
+def _is_crypto_related(title: str, summary: str = "") -> bool:
+    """제목/요약에 크립토 키워드가 포함되어 있는지 확인."""
+    blob = f"{title or ''} {summary or ''}".lower()
+    return any(kw in blob for kw in _CRYPTO_KEYWORDS)
+
+
+def _parse_published_to_ts(entry) -> int:
+    """feedparser entry의 published를 unix timestamp로 변환."""
+    try:
+        if getattr(entry, "published_parsed", None):
+            return int(time.mktime(entry.published_parsed))
+    except Exception:
+        pass
+    try:
+        if getattr(entry, "updated_parsed", None):
+            return int(time.mktime(entry.updated_parsed))
+    except Exception:
+        pass
+    return 0
+
+
+def _ts_to_relative_kor(ts: int) -> str:
+    """unix ts → '3일 전', '2시간 전' 등 한국어 상대 시간."""
+    if not ts:
+        return ""
+    try:
+        now = int(time.time())
+        diff = now - ts
+        if diff < 0:
+            return "방금"
+        if diff < 3600:
+            return f"{max(1, diff // 60)}분 전"
+        if diff < 86400:
+            return f"{diff // 3600}시간 전"
+        if diff < 86400 * 30:
+            return f"{diff // 86400}일 전"
+        if diff < 86400 * 365:
+            return f"{diff // (86400 * 30)}개월 전"
+        return f"{diff // (86400 * 365)}년 전"
+    except Exception:
+        return ""
+
+
+def fetch_latest_interview_videos(channel_feeds: dict,
+                                  crypto_only: bool = True,
+                                  per_channel: int = 5,
+                                  max_total: int = 60,
+                                  debug: bool = False) -> list:
+    """
+    RSS_FEEDS 중 🎬로 시작하는 YouTube 채널 피드들을 파싱해 최신순으로 집계.
+    각 항목: {
+        'video_id', 'url', 'title', 'channel', 'channel_key',
+        'published_ts', 'published_rel', 'published_date',
+        'thumbnail', 'summary'
+    }
+    """
+    aggregated = []
+    errors = []
+
+    for key, url in channel_feeds.items():
+        # 🎬로 시작하는 YouTube 채널만
+        if not key.startswith("🎬"):
+            continue
+        # youtube.com/feeds/videos.xml 형태만
+        if "youtube.com/feeds/videos.xml" not in url:
+            continue
+
+        try:
+            feed = feedparser.parse(url)
+            entries = getattr(feed, "entries", []) or []
+            if not entries:
+                errors.append(f"{key}: no entries")
+                continue
+
+            ch_title = ""
+            try:
+                ch_title = feed.feed.get("title", "") or ""
+            except Exception:
+                pass
+            if not ch_title:
+                ch_title = key.replace("🎬", "").strip()
+
+            count = 0
+            for entry in entries:
+                if count >= per_channel:
+                    break
+
+                title = (getattr(entry, "title", "") or "").strip()
+                summary = (getattr(entry, "summary", "") or "").strip()
+
+                # 영상 ID 추출
+                vid = ""
+                yt_id = getattr(entry, "yt_videoid", None)
+                if yt_id:
+                    vid = yt_id
+                else:
+                    link = getattr(entry, "link", "") or ""
+                    m = re.search(r"v=([A-Za-z0-9_-]{11})", link)
+                    if m:
+                        vid = m.group(1)
+                if not vid:
+                    continue
+
+                ts = _parse_published_to_ts(entry)
+
+                # 크립토 키워드 필터 (채널명이 명백히 크립토면 통과)
+                channel_crypto_forced = any(
+                    tag in key.lower()
+                    for tag in [
+                        "bitcoin", "crypto", "bankless", "what bitcoin did",
+                        "pompliano", "altcoin daily", "kitco", "itm trading",
+                        "real vision", "bits + bips", "pbd"
+                    ]
+                )
+                if crypto_only and not channel_crypto_forced:
+                    if not _is_crypto_related(title, summary):
+                        continue
+
+                # 썸네일
+                thumb = f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg"
+                try:
+                    if getattr(entry, "media_thumbnail", None):
+                        mt = entry.media_thumbnail
+                        if isinstance(mt, list) and mt:
+                            thumb = mt[0].get("url", thumb)
+                except Exception:
+                    pass
+
+                published_date = ""
+                if ts:
+                    try:
+                        published_date = datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+                    except Exception:
+                        published_date = ""
+
+                aggregated.append({
+                    "video_id": vid,
+                    "url": f"https://www.youtube.com/watch?v={vid}",
+                    "title": title,
+                    "channel": ch_title,
+                    "channel_key": key,
+                    "published_ts": ts,
+                    "published_rel": _ts_to_relative_kor(ts),
+                    "published_date": published_date,
+                    "thumbnail": thumb,
+                    "summary": summary[:200],
+                    "view_count": 0,      # (옵션) 이슈성 계산시 채워짐
+                    "hotness": 0.0,       # (옵션) 이슈성 점수
+                })
+                count += 1
+
+        except Exception as e:
+            errors.append(f"{key}: {str(e)[:120]}")
+            continue
+
+    # 중복 제거 (video_id 기준)
+    seen = set()
+    deduped = []
+    for item in aggregated:
+        if item["video_id"] in seen:
+            continue
+        seen.add(item["video_id"])
+        deduped.append(item)
+
+    # 최신순 정렬
+    deduped.sort(key=lambda x: x.get("published_ts", 0), reverse=True)
+
+    if max_total and len(deduped) > max_total:
+        deduped = deduped[:max_total]
+
+    if debug:
+        deduped.append({"_debug": True, "title": "errors: " + " | ".join(errors[:10])})
+
+    return deduped
+
+
+def enrich_with_hotness(videos: list,
+                        max_enrich: int = 30,
+                        progress_callback=None) -> list:
+    """
+    영상 리스트에 view_count 추가 + hotness(이슈성) 점수 계산.
+    이슈성 = 시간당 조회수 (view velocity).
+    YouTube API의 watchTime/CTR은 공개되지 않으므로 근사치로 사용.
+
+    빠른 경로: Invidious 공개 인스턴스의 /api/v1/videos/{id}
+    fallback: noembed (조회수 제공 X — skip)
+    """
+    invidious_hosts = [
+        "https://invidious.nerdvpn.de",
+        "https://inv.nadeko.net",
+        "https://invidious.privacyredirect.com",
+        "https://yewtu.be",
+        "https://invidious.fdn.fr",
+    ]
+
+    enriched = 0
+    for idx, v in enumerate(videos):
+        if enriched >= max_enrich:
+            break
+        if v.get("_debug"):
+            continue
+
+        vid = v.get("video_id", "")
+        if not vid:
+            continue
+
+        if progress_callback:
+            try:
+                progress_callback(idx, len(videos), v.get("title", "")[:40])
+            except Exception:
+                pass
+
+        view_count = 0
+        for host in invidious_hosts:
+            try:
+                r = requests.get(
+                    f"{host}/api/v1/videos/{vid}",
+                    timeout=6,
+                    headers={"User-Agent": "Mozilla/5.0"},
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    view_count = int(data.get("viewCount") or 0)
+                    if view_count > 0:
+                        break
+            except Exception:
+                continue
+
+        v["view_count"] = view_count
+
+        # hotness = views per hour since upload
+        ts = v.get("published_ts", 0)
+        if ts and view_count > 0:
+            try:
+                hours = max(1.0, (time.time() - ts) / 3600.0)
+                v["hotness"] = round(view_count / hours, 1)
+            except Exception:
+                v["hotness"] = 0.0
+        else:
+            v["hotness"] = 0.0
+
+        enriched += 1
+
+    return videos
+
+
+def _fmt_views(n: int) -> str:
+    """조회수를 한국어 축약 표기로 변환. 91234 → '9.1만', 1234567 → '123만'."""
+    try:
+        n = int(n)
+    except Exception:
+        return "-"
+    if n <= 0:
+        return "-"
+    if n >= 100_000_000:
+        return f"{n/100_000_000:.1f}억"
+    if n >= 10_000:
+        return f"{n/10_000:.1f}만"
+    if n >= 1_000:
+        return f"{n/1_000:.1f}K"
+    return str(n)
+
+
 def search_youtube_interviews(query: str, max_results: int = 10,
                                debug: bool = False) -> list:
     """
@@ -3753,13 +4043,149 @@ with news_tab_clip:
 
     clip_mode = st.radio(
         "모드 선택",
-        ["🔗 URL 직접 입력", "🔍 자동 검색"],
+        ["📺 최신 인터뷰 (추천)", "🔗 URL 직접 입력", "🔍 자동 검색"],
         index=0,
         key="clip_mode",
         horizontal=True,
     )
 
-    if clip_mode == "🔗 URL 직접 입력":
+    if clip_mode == "📺 최신 인터뷰 (추천)":
+        st.markdown(
+            "**🎬 17개 YouTube 채널에서 최신 크립토 인터뷰를 실시간으로 집계합니다.**  \n"
+            "CNBC · Bloomberg · Fox Business · Kitco · What Bitcoin Did · PBD · Pompliano · Bankless · Real Vision · Sky News Arabia 외"
+        )
+
+        col_opt1, col_opt2, col_opt3 = st.columns([2, 2, 1])
+        with col_opt1:
+            sort_mode = st.radio(
+                "정렬",
+                ["📅 최신순", "🔥 최신 + 이슈성"],
+                index=0,
+                key="latest_sort_mode",
+                horizontal=True,
+                help="이슈성 = 시간당 조회수 (view velocity). "
+                     "YouTube는 시청시간/CTR을 공개하지 않아 조회수 속도로 근사합니다.",
+            )
+        with col_opt2:
+            crypto_only = st.checkbox(
+                "크립토 관련만 필터",
+                value=True,
+                key="latest_crypto_only",
+                help="제목/설명에 bitcoin/crypto/Saylor 등 키워드 포함한 영상만.",
+            )
+        with col_opt3:
+            per_channel = st.number_input(
+                "채널당 개수",
+                min_value=1, max_value=10, value=5,
+                key="latest_per_channel",
+            )
+
+        fetch_btn = st.button(
+            "📥 최신 인터뷰 불러오기",
+            type="primary",
+            use_container_width=True,
+            key="fetch_latest_interviews",
+        )
+
+        if fetch_btn:
+            with st.spinner(f"📡 17개 YouTube 채널 RSS 파싱 중..."):
+                videos = fetch_latest_interview_videos(
+                    RSS_FEEDS,
+                    crypto_only=crypto_only,
+                    per_channel=int(per_channel),
+                    max_total=60,
+                )
+
+            if not videos:
+                st.warning("⚠️ 최신 인터뷰를 불러오지 못했습니다. '크립토 관련만 필터'를 끄고 다시 시도해보세요.")
+            else:
+                # 이슈성 정렬 선택시 조회수 enrichment
+                if sort_mode == "🔥 최신 + 이슈성":
+                    prog = st.progress(0.0, text="🔥 이슈성 점수 계산 중...")
+                    def _enrich_cb(i, n, title):
+                        prog.progress(min(1.0, (i + 1) / max(1, n)),
+                                      text=f"🔥 이슈성 계산 ({i+1}/{n}): {title}")
+                    videos = enrich_with_hotness(
+                        videos, max_enrich=30, progress_callback=_enrich_cb
+                    )
+                    prog.empty()
+                    # 최신순 × hotness 가중치 섞기 (최근 30일 이내면 hotness 우선)
+                    now_ts = int(time.time())
+                    for v in videos:
+                        ts = v.get("published_ts", 0)
+                        age_days = (now_ts - ts) / 86400 if ts else 9999
+                        # 최근일수록 가중치 ↑. 30일 이내 영상에 이슈성 점수 유효
+                        if age_days <= 30:
+                            v["_sort_score"] = v.get("hotness", 0) * (1.0 if age_days <= 7 else 0.5)
+                        else:
+                            v["_sort_score"] = 0
+                    # 이슈성 점수 내림차순, 동점이면 최신순
+                    videos.sort(
+                        key=lambda x: (x.get("_sort_score", 0), x.get("published_ts", 0)),
+                        reverse=True,
+                    )
+
+                st.session_state["latest_interviews"] = videos
+                st.session_state["latest_sort_mode_used"] = sort_mode
+                st.success(f"✅ {len(videos)}개 인터뷰 발견!")
+
+        # 집계된 인터뷰 리스트 표시
+        if st.session_state.get("latest_interviews"):
+            videos = st.session_state["latest_interviews"]
+            used_sort = st.session_state.get("latest_sort_mode_used", "📅 최신순")
+            st.markdown(f"### 📋 {used_sort} — 분석할 인터뷰를 선택하세요 ({len(videos)}개)")
+
+            for idx, v in enumerate(videos):
+                if v.get("_debug"):
+                    continue
+                with st.container():
+                    col_thumb, col_info, col_act = st.columns([1.2, 3.5, 1])
+                    with col_thumb:
+                        try:
+                            st.image(v.get("thumbnail", ""), use_container_width=True)
+                        except Exception:
+                            pass
+                    with col_info:
+                        st.markdown(f"**{idx+1}. {v.get('title', '')}**")
+                        # 메타데이터 라인
+                        meta_parts = []
+                        if v.get("published_rel"):
+                            meta_parts.append(f"📅 {v['published_rel']}")
+                        if v.get("published_date"):
+                            meta_parts.append(f"({v['published_date']})")
+                        if v.get("view_count", 0) > 0:
+                            meta_parts.append(f"👁 {_fmt_views(v['view_count'])}")
+                        if v.get("hotness", 0) > 0:
+                            meta_parts.append(f"🔥 {_fmt_views(int(v['hotness']))}/h")
+                        meta_parts.append(f"📺 {v.get('channel', '')}")
+                        st.caption(" · ".join(meta_parts))
+                        st.caption(f"🔗 [YouTube에서 보기]({v.get('url', '')})")
+                    with col_act:
+                        if st.button("🎬 분석", key=f"analyze_latest_{idx}", use_container_width=True):
+                            if not claude_api_key:
+                                st.error("Claude API 키를 입력해주세요!")
+                            else:
+                                with st.spinner("📝 자막 추출 중..."):
+                                    sub_result = extract_youtube_subtitles(v["url"])
+                                if sub_result.get("error"):
+                                    st.error(f"❌ {sub_result['error']}")
+                                else:
+                                    st.session_state["clip_subtitles"] = sub_result
+                                    st.session_state["clip_video_url"] = v["url"]
+                                    with st.spinner("🤖 Claude가 핵심 발언 분석 중..."):
+                                        quotes = find_quotable_moments_with_claude(
+                                            api_key=claude_api_key,
+                                            video_title=sub_result["title"],
+                                            subtitle_text=sub_result["full_text"],
+                                            model=claude_model,
+                                            num_quotes=5,
+                                        )
+                                    st.session_state["clip_quotes"] = quotes
+                                    st.success(f"✅ 자막 추출 + 핵심 발언 {len(quotes)}개 발견!")
+                                    st.rerun()
+                st.divider()
+
+    elif clip_mode == "🔗 URL 직접 입력":
         video_url_input = st.text_input(
             "YouTube 영상 URL",
             placeholder="https://www.youtube.com/watch?v=...",
@@ -3800,8 +4226,9 @@ with news_tab_clip:
                     st.session_state["clip_quotes"] = quotes
                     st.success(f"🔥 {len(quotes)}개 핵심 발언 발견!")
 
-    else:  # 🔍 자동 검색
+    elif clip_mode == "🔍 자동 검색":  # 🔍 자동 검색 (프리셋 기반)
         st.markdown("**크립토/테슬라 VIP 인물의 최신 인터뷰를 자동 검색합니다.**")
+        st.caption("💡 특정 인물 중심으로 찾고 싶을 때 사용. 일반적으로는 📺 최신 인터뷰 모드를 추천합니다.")
 
         search_presets = {
             # ── 🔥 VIP 인터뷰 ──
