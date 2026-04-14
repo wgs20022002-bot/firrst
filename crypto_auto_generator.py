@@ -3804,12 +3804,42 @@ with news_tab_clip:
         st.markdown("**크립토/테슬라 VIP 인물의 최신 인터뷰를 자동 검색합니다.**")
 
         search_presets = {
+            # ── 🔥 VIP 인터뷰 ──
             "🔥 Michael Saylor 인터뷰": "Michael Saylor bitcoin interview 2026",
             "⚡ Elon Musk 인터뷰": "Elon Musk interview crypto tesla 2026",
             "📊 Cathie Wood 인터뷰": "Cathie Wood ARK bitcoin interview 2026",
             "💰 Larry Fink 인터뷰": "Larry Fink BlackRock bitcoin ETF interview",
+            "🚀 Tom Lee (Fundstrat) 인터뷰": "Tom Lee Fundstrat CNBC bitcoin interview",
+            "🤖 Brian Armstrong (Coinbase)": "Brian Armstrong Coinbase interview crypto",
+            "🟢 CZ (Binance) 인터뷰": "CZ Changpeng Zhao Binance interview",
+            "💎 Arthur Hayes 인터뷰": "Arthur Hayes BitMEX interview crypto macro",
+            # ── 🎤 CryptoYuna 스타일 인터뷰 단골 게스트 ──
+            "🎤 Lawrence Lepard 인터뷰": "Lawrence Lepard bitcoin gold interview Kitco",
+            "🎤 Nigel Farage (Stack BTC)": "Nigel Farage bitcoin Stack BTC interview",
+            "🎤 Samson Mow 인터뷰": "Samson Mow bitcoin JAN3 interview",
+            "🎤 Adam Back 인터뷰": "Adam Back Blockstream bitcoin interview",
+            "🎤 Fred Thiel (MARA) 인터뷰": "Fred Thiel MARA mining bitcoin interview",
+            "🎤 Max Keiser 인터뷰": "Max Keiser bitcoin El Salvador interview",
+            "🎤 Lyn Alden 인터뷰": "Lyn Alden bitcoin macro interview",
+            "🎤 Preston Pysh 인터뷰": "Preston Pysh bitcoin investor interview",
+            "🎤 Luke Gromen 인터뷰": "Luke Gromen bitcoin dollar macro interview",
+            "🎤 Greg Foss 인터뷰": "Greg Foss bitcoin credit interview",
+            # ── 🎬 팟캐스트 호스트 신작 ──
+            "🎬 Peter McCormack (What Bitcoin Did)": "Peter McCormack What Bitcoin Did 2026",
+            "🎬 Patrick Bet-David (PBD)": "PBD Podcast Patrick Bet-David crypto 2026",
+            "🎬 Anthony Pompliano 신작": "Anthony Pompliano podcast bitcoin 2026",
+            "🎬 Natalie Brunell (Coin Stories)": "Natalie Brunell Coin Stories bitcoin 2026",
+            "🎬 Real Vision Saylor/Pal": "Real Vision bitcoin macro interview",
+            # ── 🏛️ 정치/정부 ──
+            "🏛️ Trump 크립토 발언": "Trump bitcoin crypto statement 2026",
+            "🏛️ JD Vance 크립토": "JD Vance bitcoin crypto interview",
+            "🏛️ Cynthia Lummis (BTC 준비자산)": "Cynthia Lummis bitcoin strategic reserve",
+            "🏛️ SEC Paul Atkins": "Paul Atkins SEC crypto bitcoin 2026",
+            # ── 🌍 다국어/지역 ──
+            "🌍 Sky News Arabia (아랍 인터뷰)": "Sky News Arabia bitcoin Saylor interview",
             "🏛️ 비트코인 컨퍼런스": "bitcoin conference keynote speech 2026",
             "📈 CNBC 크립토 인터뷰": "CNBC bitcoin crypto interview",
+            "📈 Bloomberg 크립토 인터뷰": "Bloomberg bitcoin crypto ETF interview",
             "🚗 테슬라 인터뷰": "Tesla Elon Musk interview robotaxi FSD 2026",
         }
 
