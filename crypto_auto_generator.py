@@ -4213,11 +4213,90 @@ with news_tab_clip:
     )
 
     if clip_mode == "📺 최신 인터뷰 (추천)":
-        st.markdown(
-            "**🎬 17개 YouTube 채널에서 최신 크립토 인터뷰를 실시간으로 집계합니다.**  \n"
-            "CNBC · Bloomberg · Fox Business · Kitco · What Bitcoin Did · PBD · Pompliano · Bankless · Real Vision · Sky News Arabia 외"
-        )
+        # ── 🎬 YouTube 채널 카테고리 매핑 ──
+        CLIP_CHANNEL_CATEGORIES = {
+            "📺 메이저 비즈니스/뉴스": [
+                "🎬 CNBC Television", "🎬 CNBC", "🎬 Bloomberg Television",
+                "🎬 Fox News (Fox Business)", "🎬 Yahoo Finance",
+            ],
+            "🥇 금/매크로/대안자산": [
+                "🎬 Kitco News", "🎬 ITM Trading", "🎬 Real Vision",
+            ],
+            "🎙️ 크립토 팟캐스트/인터뷰": [
+                "🎬 What Bitcoin Did (Peter McCormack)",
+                "🎬 PBD Podcast / Valuetainment",
+                "🎬 Anthony Pompliano",
+                "🎬 Altcoin Daily",
+                "🎬 Bankless",
+                "🎬 Bitcoin Magazine",
+                "🎬 Bits + Bips (Unchained)",
+            ],
+            "🌍 다국어/지역": [
+                "🎬 Sky News Arabia",
+            ],
+        }
+        # 전체 🎬 채널 목록
+        all_clip_channels = [k for k in RSS_FEEDS.keys() if k.startswith("🎬")]
 
+        st.markdown("**🎬 YouTube 채널에서 최신 크립토 인터뷰를 실시간으로 집계합니다.**")
+
+        # ── 채널 선택 UI ──
+        with st.expander(
+            f"📡 **소스 채널 선택** ({len(st.session_state.get('selected_clip_channels', all_clip_channels))}/{len(all_clip_channels)}개)",
+            expanded=False,
+        ):
+            col_qa1, col_qa2, col_qa3 = st.columns(3)
+            with col_qa1:
+                if st.button("✅ 전체 선택", key="clip_ch_all", use_container_width=True):
+                    for ch in all_clip_channels:
+                        st.session_state[f"clip_ch_{ch}"] = True
+                    st.rerun()
+            with col_qa2:
+                if st.button("❌ 전체 해제", key="clip_ch_none", use_container_width=True):
+                    for ch in all_clip_channels:
+                        st.session_state[f"clip_ch_{ch}"] = False
+                    st.rerun()
+            with col_qa3:
+                if st.button("⭐ 추천 기본값", key="clip_ch_default", use_container_width=True):
+                    # 추천: 핵심 크립토 팟캐스트 + 주요 TV 방송
+                    recommended = [
+                        "🎬 CNBC Television", "🎬 Bloomberg Television", "🎬 Kitco News",
+                        "🎬 What Bitcoin Did (Peter McCormack)", "🎬 Anthony Pompliano",
+                        "🎬 Bankless", "🎬 Bitcoin Magazine", "🎬 Real Vision",
+                    ]
+                    for ch in all_clip_channels:
+                        st.session_state[f"clip_ch_{ch}"] = (ch in recommended)
+                    st.rerun()
+
+            # 첫 방문시 기본값: 전체 선택
+            if not any(f"clip_ch_{ch}" in st.session_state for ch in all_clip_channels):
+                for ch in all_clip_channels:
+                    st.session_state[f"clip_ch_{ch}"] = True
+
+            selected_channels = []
+            for cat_name, ch_list in CLIP_CHANNEL_CATEGORIES.items():
+                valid_ch = [c for c in ch_list if c in RSS_FEEDS]
+                if not valid_ch:
+                    continue
+                cat_selected_count = sum(1 for c in valid_ch if st.session_state.get(f"clip_ch_{c}", True))
+                st.markdown(f"**{cat_name}** ({cat_selected_count}/{len(valid_ch)})")
+                # 3열 그리드
+                cols = st.columns(3)
+                for i, ch in enumerate(valid_ch):
+                    with cols[i % 3]:
+                        label = ch.replace("🎬 ", "")
+                        checked = st.checkbox(
+                            label,
+                            value=st.session_state.get(f"clip_ch_{ch}", True),
+                            key=f"clip_ch_{ch}",
+                        )
+                        if checked:
+                            selected_channels.append(ch)
+
+        # 선택된 채널로 필터된 feeds
+        filtered_feeds = {k: v for k, v in RSS_FEEDS.items() if k in selected_channels}
+
+        # 정렬/필터 옵션
         col_opt1, col_opt2, col_opt3 = st.columns([2, 2, 1])
         with col_opt1:
             sort_mode = st.radio(
@@ -4243,17 +4322,27 @@ with news_tab_clip:
                 key="latest_per_channel",
             )
 
+        # 선택 현황 표시
+        if selected_channels:
+            ch_summary = ", ".join([c.replace("🎬 ", "") for c in selected_channels[:5]])
+            if len(selected_channels) > 5:
+                ch_summary += f" 외 {len(selected_channels) - 5}개"
+            st.caption(f"📡 선택된 채널 ({len(selected_channels)}개): {ch_summary}")
+        else:
+            st.warning("⚠️ 선택된 채널이 없습니다. 위 '소스 채널 선택'에서 최소 1개 이상 체크해주세요.")
+
         fetch_btn = st.button(
             "📥 최신 인터뷰 불러오기",
             type="primary",
             use_container_width=True,
             key="fetch_latest_interviews",
+            disabled=(len(selected_channels) == 0),
         )
 
         if fetch_btn:
-            with st.spinner(f"📡 17개 YouTube 채널 RSS 파싱 중..."):
+            with st.spinner(f"📡 {len(selected_channels)}개 YouTube 채널 RSS 파싱 중..."):
                 videos = fetch_latest_interview_videos(
-                    RSS_FEEDS,
+                    filtered_feeds,
                     crypto_only=crypto_only,
                     per_channel=int(per_channel),
                     max_total=60,
