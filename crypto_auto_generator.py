@@ -114,6 +114,66 @@ RSS_FEEDS = {
 KOREAN_FEEDS = {"🇰🇷 블록미디어", "🇰🇷 디지털투데이", "🇰🇷 코인리더스"}
 
 # ─────────────────────────────────────────────
+#  🌟 크립토/정치/매크로 유명 인물 필터
+#  최신 인터뷰 리스트에서 "이 사람이 출연한 영상만" 필터링할 때 사용
+#  키 = 화면 표시 이름 / 값 = 제목·설명에서 찾을 키워드 리스트 (OR 매칭, 대소문자 무시)
+# ─────────────────────────────────────────────
+CRYPTO_VIP_KEYWORDS = {
+    # ── 🏛️ 정치/정부 (Trump 정권 크립토 친화 인사) ──
+    "🏛️ Donald Trump":          ["trump", "donald trump"],
+    "🏛️ JD Vance":              ["jd vance", "j.d. vance", "vance"],
+    "🏛️ Cynthia Lummis":        ["lummis", "cynthia lummis"],
+    "🏛️ Paul Atkins (SEC)":     ["paul atkins", "atkins sec"],
+    "🏛️ Elizabeth Warren":      ["elizabeth warren", "senator warren"],
+    "🏛️ Gary Gensler":          ["gensler"],
+    "🏛️ Hester Peirce":         ["hester peirce", "peirce sec"],
+    "🏛️ David Sacks (AI·Crypto Czar)": ["david sacks", "sacks crypto"],
+    # ── ₿ 비트코인 맥시멀리스트 / Corporate ──
+    "₿ Michael Saylor":          ["saylor", "michael saylor", "microstrategy", "strategy (mstr)", "mstr"],
+    "₿ Jack Mallers":            ["jack mallers", "mallers", "strike app"],
+    "₿ Adam Back":               ["adam back", "blockstream"],
+    "₿ Samson Mow":              ["samson mow", "jan3"],
+    "₿ Max Keiser":              ["max keiser", "keiser"],
+    "₿ Nigel Farage":            ["nigel farage", "farage"],
+    "₿ Peter McCormack":         ["peter mccormack", "mccormack", "what bitcoin did"],
+    "₿ Anthony Pompliano":       ["anthony pompliano", "pompliano", "pomp"],
+    "₿ Natalie Brunell":         ["natalie brunell", "coin stories"],
+    "₿ Preston Pysh":            ["preston pysh", "pysh"],
+    "₿ Fred Thiel (MARA)":       ["fred thiel", "mara holdings"],
+    # ── 📊 월스트리트 / 매크로 / 애널리스트 ──
+    "📊 Tom Lee (Fundstrat)":    ["tom lee", "fundstrat"],
+    "📊 Cathie Wood (ARK)":      ["cathie wood", "ark invest", "ark invest"],
+    "📊 Larry Fink (BlackRock)": ["larry fink", "blackrock"],
+    "📊 Raoul Pal":              ["raoul pal", "real vision"],
+    "📊 Lyn Alden":              ["lyn alden"],
+    "📊 Luke Gromen":            ["luke gromen", "gromen"],
+    "📊 Greg Foss":              ["greg foss"],
+    "📊 Lawrence Lepard":        ["lawrence lepard", "larry lepard", "lepard"],
+    "📊 Peter Schiff":           ["peter schiff", "schiff"],
+    "📊 Jim Cramer":             ["jim cramer", "cramer"],
+    "📊 Ray Dalio":              ["ray dalio", "dalio"],
+    "📊 Stanley Druckenmiller":  ["druckenmiller"],
+    "📊 Paul Tudor Jones":       ["paul tudor jones", "tudor jones"],
+    # ── 🏢 거래소 / 기업 CEO ──
+    "🏢 CZ (Binance)":           ["changpeng zhao", " cz ", "cz binance", "binance ceo"],
+    "🏢 Brian Armstrong (Coinbase)": ["brian armstrong", "coinbase ceo"],
+    "🏢 Paolo Ardoino (Tether)": ["paolo ardoino", "tether ceo"],
+    "🏢 Jeremy Allaire (Circle)": ["jeremy allaire", "circle ceo", "usdc"],
+    "🏢 Kris Marszalek (Crypto.com)": ["kris marszalek", "crypto.com ceo"],
+    "🏢 SBF / FTX 재판":          ["sam bankman", "sbf", "ftx trial"],
+    # ── 🔗 이더리움 / 알트 진영 ──
+    "🔗 Vitalik Buterin":        ["vitalik", "buterin"],
+    "🔗 Joseph Lubin (Consensys)": ["joseph lubin", "consensys"],
+    "🔗 Justin Sun":             ["justin sun", "tron"],
+    "🔗 Do Kwon":                ["do kwon", "terra luna"],
+    "🔗 Charles Hoskinson":      ["charles hoskinson", "cardano ceo"],
+    # ── 🚀 기타 ──
+    "🚀 Elon Musk":              ["elon musk", "elon", " musk "],
+    "🚀 David Portnoy":          ["portnoy", "davey day trader"],
+    "🚀 Mr. Beast (크립토)":     ["mrbeast", "mr beast", "mr. beast"],
+}
+
+# ─────────────────────────────────────────────
 #  테슬라/주식 RSS 피드
 # ─────────────────────────────────────────────
 TESLA_RSS_FEEDS = {
@@ -4393,6 +4453,71 @@ with news_tab_clip:
                 key="latest_per_channel",
             )
 
+        # ── 🌟 VIP 인물 필터 (Saylor, Trump, Tom Lee 등) ──
+        with st.expander(
+            f"🌟 **VIP 인물 필터** — 선택한 인물이 언급된 영상만 보기 "
+            f"({len(st.session_state.get('clip_vip_filter', []))}/{len(CRYPTO_VIP_KEYWORDS)}명 선택)",
+            expanded=False,
+        ):
+            st.caption(
+                "💡 여러 명 선택 가능 (OR 조건). 비워두면 필터 없이 전체 표시. "
+                "제목·설명에서 키워드 매칭 (대소문자 무시)."
+            )
+            # 빠른 선택 버튼
+            col_vq1, col_vq2, col_vq3, col_vq4 = st.columns(4)
+            with col_vq1:
+                if st.button("❌ 전체 해제", key="vip_none", use_container_width=True):
+                    st.session_state["clip_vip_filter"] = []
+                    st.rerun()
+            with col_vq2:
+                if st.button("⭐ 핵심 5인", key="vip_core", use_container_width=True):
+                    st.session_state["clip_vip_filter"] = [
+                        "₿ Michael Saylor", "📊 Tom Lee (Fundstrat)",
+                        "🏛️ Donald Trump", "🚀 Elon Musk", "📊 Cathie Wood (ARK)",
+                    ]
+                    st.rerun()
+            with col_vq3:
+                if st.button("🏛️ 정치인만", key="vip_politics", use_container_width=True):
+                    st.session_state["clip_vip_filter"] = [
+                        k for k in CRYPTO_VIP_KEYWORDS.keys() if k.startswith("🏛️")
+                    ]
+                    st.rerun()
+            with col_vq4:
+                if st.button("₿ 비트코인 맥시", key="vip_btc_maxi", use_container_width=True):
+                    st.session_state["clip_vip_filter"] = [
+                        k for k in CRYPTO_VIP_KEYWORDS.keys() if k.startswith("₿")
+                    ]
+                    st.rerun()
+
+            # 카테고리별 그룹 표시
+            vip_groups = {
+                "🏛️ 정치/정부":        [k for k in CRYPTO_VIP_KEYWORDS.keys() if k.startswith("🏛️")],
+                "₿ 비트코인 맥시":    [k for k in CRYPTO_VIP_KEYWORDS.keys() if k.startswith("₿")],
+                "📊 월스트리트/매크로": [k for k in CRYPTO_VIP_KEYWORDS.keys() if k.startswith("📊")],
+                "🏢 거래소/기업 CEO":  [k for k in CRYPTO_VIP_KEYWORDS.keys() if k.startswith("🏢")],
+                "🔗 이더/알트":        [k for k in CRYPTO_VIP_KEYWORDS.keys() if k.startswith("🔗")],
+                "🚀 기타":             [k for k in CRYPTO_VIP_KEYWORDS.keys() if k.startswith("🚀")],
+            }
+            current_vip = set(st.session_state.get("clip_vip_filter", []))
+            new_vip_selection = []
+            for grp_name, grp_keys in vip_groups.items():
+                if not grp_keys:
+                    continue
+                st.markdown(f"**{grp_name}** ({sum(1 for k in grp_keys if k in current_vip)}/{len(grp_keys)})")
+                v_cols = st.columns(3)
+                for i, k in enumerate(grp_keys):
+                    with v_cols[i % 3]:
+                        checked = st.checkbox(
+                            k.split(" ", 1)[1] if " " in k else k,  # 이모지 제거한 이름
+                            value=(k in current_vip),
+                            key=f"vip_ck_{k}",
+                        )
+                        if checked:
+                            new_vip_selection.append(k)
+            st.session_state["clip_vip_filter"] = new_vip_selection
+
+        vip_filter_list = st.session_state.get("clip_vip_filter", [])
+
         # 선택 현황 표시
         if selected_channels:
             ch_summary = ", ".join([c.replace("🎬 ", "") for c in selected_channels[:5]])
@@ -4418,6 +4543,38 @@ with news_tab_clip:
                     per_channel=int(per_channel),
                     max_total=60,
                 )
+
+            # ── 🌟 VIP 인물 필터 적용 ──
+            if videos and vip_filter_list:
+                # 선택된 인물들의 키워드 OR 매칭
+                matched_videos = []
+                for v in videos:
+                    haystack = (
+                        (v.get("title", "") or "") + " " +
+                        (v.get("summary", "") or "") + " " +
+                        (v.get("channel", "") or "")
+                    ).lower()
+                    matched_vips = []
+                    for vip_name in vip_filter_list:
+                        keywords = CRYPTO_VIP_KEYWORDS.get(vip_name, [])
+                        if any(kw.lower() in haystack for kw in keywords):
+                            matched_vips.append(vip_name)
+                    if matched_vips:
+                        v["_matched_vips"] = matched_vips
+                        matched_videos.append(v)
+                orig_count = len(videos)
+                videos = matched_videos
+                if not videos:
+                    st.warning(
+                        f"⚠️ 선택한 VIP 인물({len(vip_filter_list)}명)이 언급된 영상이 없습니다. "
+                        f"전체 {orig_count}개 중 0개 매칭. 다른 인물을 선택하거나 필터를 해제해보세요."
+                    )
+                else:
+                    st.info(
+                        f"🌟 VIP 필터 적용: 전체 {orig_count}개 중 {len(videos)}개 매칭 "
+                        f"({', '.join([v.split(' ', 1)[1] if ' ' in v else v for v in vip_filter_list[:3]])}"
+                        f"{' 외 ' + str(len(vip_filter_list)-3) + '명' if len(vip_filter_list) > 3 else ''})"
+                    )
 
             if not videos:
                 st.warning("⚠️ 최신 인터뷰를 불러오지 못했습니다. '크립토 관련만 필터'를 끄고 다시 시도해보세요.")
@@ -4494,6 +4651,10 @@ with news_tab_clip:
                             meta_parts.append(f"🔥 {_fmt_views(int(v['hotness']))}/h")
                         meta_parts.append(f"📺 {v.get('channel', '')}")
                         st.caption(" · ".join(meta_parts))
+                        # 🌟 매칭된 VIP 인물 배지 표시
+                        if v.get("_matched_vips"):
+                            vip_badges = " ".join([f"`{m}`" for m in v["_matched_vips"][:5]])
+                            st.caption(f"🌟 {vip_badges}")
                         st.caption(f"🔗 [YouTube에서 보기]({v.get('url', '')})")
                     with col_act:
                         if st.button("🎬 분석", key=f"analyze_latest_{idx}", use_container_width=True):
