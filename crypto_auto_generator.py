@@ -1836,6 +1836,7 @@ def fetch_latest_interview_videos(channel_feeds: dict,
                 ch_title = key.replace("🎬", "").strip()
 
             count = 0
+            now_ts = int(time.time())
             for entry in entries:
                 if count >= per_channel:
                     break
@@ -1857,6 +1858,23 @@ def fetch_latest_interview_videos(channel_feeds: dict,
                     continue
 
                 ts = _parse_published_to_ts(entry)
+
+                # ── 프리미어/라이브 예약 필터 ──
+                # 1) 아직 방송 시작 안 한 영상(미래 timestamp) 제외
+                if ts and ts > now_ts + 60:
+                    continue
+                # 2) 아주 가까운 미래(오차) or 방금 시작한 라이브 — 제목 패턴으로 컷
+                title_low = title.lower()
+                # LIVE/Premiere/Scheduled 관련 키워드
+                live_patterns = [
+                    "🔴 live", "[live]", "live now", "premiering",
+                    "premieres", "watch live", "live stream",
+                    "live:", "[live now]", "livestream"
+                ]
+                if any(p in title_low for p in live_patterns):
+                    continue
+                # 3) 업로드 후 5분 미만이면 프리미어가 방금 끝난 직후일 수 있음 → 일단 통과
+                #    (사용자가 분석 클릭시 자막 없으면 에러로 알려줌)
 
                 # 크립토 키워드 필터 (채널명이 명백히 크립토면 통과)
                 channel_crypto_forced = any(
@@ -4168,7 +4186,26 @@ with news_tab_clip:
                                 with st.spinner("📝 자막 추출 중..."):
                                     sub_result = extract_youtube_subtitles(v["url"])
                                 if sub_result.get("error"):
-                                    st.error(f"❌ {sub_result['error']}")
+                                    err_msg = sub_result["error"]
+                                    err_low = err_msg.lower()
+                                    # 프리미어/라이브 예약 → 친절한 메시지
+                                    if "premieres in" in err_low or "premiere" in err_low:
+                                        st.warning(
+                                            f"⏰ 아직 방송 전인 프리미어 영상입니다. "
+                                            f"방송 시작 후 다시 시도해주세요.\n\n상세: {err_msg[:200]}"
+                                        )
+                                    elif "live event" in err_low or "hasn't started" in err_low or "scheduled" in err_low:
+                                        st.warning(
+                                            f"📡 아직 시작되지 않은 라이브 방송입니다. "
+                                            f"방송 시작 후 다시 시도해주세요.\n\n상세: {err_msg[:200]}"
+                                        )
+                                    elif "no subtitle" in err_low or "자막" in err_msg:
+                                        st.error(
+                                            f"❌ 자막이 없는 영상입니다. "
+                                            f"자막이 있는 다른 영상을 선택해주세요.\n\n상세: {err_msg[:200]}"
+                                        )
+                                    else:
+                                        st.error(f"❌ {err_msg}")
                                 else:
                                     st.session_state["clip_subtitles"] = sub_result
                                     st.session_state["clip_video_url"] = v["url"]
