@@ -4110,6 +4110,27 @@ with news_tab_clip:
     st.markdown("**🎬 YouTube 인터뷰에서 핵심 발언을 찾아 X 포스트 + 영상 클립을 생성합니다.**")
     st.caption("@BitcoinSapiens 스타일: 인터뷰 클립 + 한국어 번역 텍스트")
 
+    # ══════════════════════════════════════════════
+    #  🍪 Streamlit Secrets에서 쿠키 자동 로드 (영구 저장)
+    # ══════════════════════════════════════════════
+    # 앱 재시작/재배포 후에도 쿠키가 사라지지 않도록 secrets에서 복원
+    if not st.session_state.get("youtube_cookies_path"):
+        try:
+            secret_cookies = st.secrets.get("youtube_cookies", "") if hasattr(st, "secrets") else ""
+        except Exception:
+            secret_cookies = ""
+        if secret_cookies and len(secret_cookies) > 100:
+            try:
+                cookies_dir = os.path.join(DEFAULT_OUTPUT_DIR, "_cookies")
+                os.makedirs(cookies_dir, exist_ok=True)
+                cookies_path = os.path.join(cookies_dir, "youtube_cookies.txt")
+                with open(cookies_path, "w", encoding="utf-8") as f:
+                    f.write(secret_cookies)
+                st.session_state["youtube_cookies_path"] = cookies_path
+                st.session_state["cookies_from_secrets"] = True
+            except Exception:
+                pass
+
     # ── 원본 영상 파일 업로드 (선택) ──
     # Streamlit Cloud는 YouTube 봇 차단으로 스트리밍 다운로드가 자주 실패함.
     # 사용자가 로컬에서 받은 MP4를 업로드하면 100% 클리핑 가능.
@@ -4146,24 +4167,74 @@ with news_tab_clip:
     # ══════════════════════════════════════════════
     cookies_status = "🍪 **YouTube 쿠키 업로드 (봇 차단 해결)**"
     if st.session_state.get("youtube_cookies_path"):
-        cookies_status = "🍪 **YouTube 쿠키 업로드 완료 ✅** (클릭하면 재업로드)"
+        if st.session_state.get("cookies_from_secrets"):
+            cookies_status = "🍪 **YouTube 쿠키 적용 중 ✅ (Secrets에서 자동 로드 — 영구)**"
+        else:
+            cookies_status = "🍪 **YouTube 쿠키 업로드 완료 ✅ (세션 전용 — 재시작시 사라짐)**"
     with st.expander(cookies_status, expanded=False):
         st.markdown(
             "Streamlit Cloud IP는 YouTube가 'Sign in to confirm you're not a bot'로 차단합니다.  \n"
             "**해결책**: 본인 브라우저 쿠키를 export해서 업로드하면 yt-dlp가 인증된 요청으로 영상을 받을 수 있어요."
         )
-        st.markdown(
-            "**📋 쿠키 export 방법 (3분):**\n"
-            "1. Chrome/Edge에 확장 프로그램 설치: "
-            "[**Get cookies.txt LOCALLY**](https://chromewebstore.google.com/detail/get-cookies-txt-locally/cclelndahbckbenkjhflpdbgdldlbecc)\n"
-            "2. YouTube에 **로그인된 상태**에서 https://www.youtube.com 방문\n"
-            "3. 확장 프로그램 아이콘 클릭 → **Export** → `youtube.com_cookies.txt` 저장\n"
-            "4. 아래에 업로드"
+
+        # ━━━ ⚠️ 저장 방식 안내 (세션 vs 영구) ━━━
+        st.info(
+            "ℹ️ **쿠키는 이렇게 저장됩니다:**\n\n"
+            "| 저장 방식 | 유지 기간 | 설정 난이도 |\n"
+            "|---|---|---|\n"
+            "| **파일 업로드** (지금 방식) | 🔸 세션 동안만. 앱 재시작·재배포시 삭제 | ⭐ 쉬움 |\n"
+            "| **Streamlit Secrets** (영구) | 🔹 영구 (쿠키 만료까지 몇 주) | ⭐⭐ 한 번만 설정 |\n"
+            "\n매번 업로드가 귀찮다면 아래 **'옵션 B: 영구 저장'** 참고."
         )
+
+        tab_a, tab_b = st.tabs(["📤 옵션 A: 파일 업로드 (간단)", "🔒 옵션 B: 영구 저장 (Secrets)"])
+
+        with tab_a:
+            st.markdown(
+                "**📋 쿠키 export 방법 (3분):**\n"
+                "1. Chrome/Edge에 확장 프로그램 설치: "
+                "[**Get cookies.txt LOCALLY**](https://chromewebstore.google.com/detail/get-cookies-txt-locally/cclelndahbckbenkjhflpdbgdldlbecc)\n"
+                "2. YouTube에 **로그인된 상태**에서 https://www.youtube.com 방문\n"
+                "3. 확장 프로그램 아이콘 클릭 → **Export** → `youtube.com_cookies.txt` 저장\n"
+                "4. 아래에 업로드"
+            )
+            st.warning(
+                "⚠️ **주의**: 이 방식은 **세션 동안만** 저장됩니다. "
+                "앱이 재시작되면 쿠키가 사라져서 다시 업로드해야 합니다."
+            )
+
+        with tab_b:
+            st.markdown(
+                "**🔒 Streamlit Secrets에 쿠키 저장 (한 번만 설정하면 영구 유지):**"
+            )
+            st.markdown(
+                "1. **옵션 A**처럼 쿠키 파일을 export한다 (`youtube.com_cookies.txt`)\n"
+                "2. 그 파일을 **메모장**으로 열고 **전체 내용 복사** (Ctrl+A → Ctrl+C)\n"
+                "3. Streamlit Cloud 웹사이트 → 본인 앱 → 우측 상단 **⋮ (점 3개)** → **Settings** → **Secrets**\n"
+                "4. 아래 텍스트를 붙여넣기:"
+            )
+            st.code('''youtube_cookies = """
+# Netscape HTTP Cookie File
+# (여기에 쿠키 파일 전체 내용 붙여넣기)
+.youtube.com	TRUE	/	TRUE	1234567890	COOKIE_NAME	cookie_value
+...
+"""''', language="toml")
+            st.markdown(
+                "5. **Save** 클릭 → 앱 자동 재시작 → 쿠키가 **영구 적용됨**\n\n"
+                "이후에는 앱 재배포/재시작해도 쿠키가 자동 로드됩니다.  \n"
+                "쿠키 갱신하려면 Secrets 편집에서 새 값으로 덮어쓰기."
+            )
+            st.info(
+                "💡 Streamlit Cloud Secrets는 **암호화 저장**되고 GitHub에 커밋되지 않아요. "
+                "본인만 볼 수 있으니 안전합니다."
+            )
+            if st.session_state.get("cookies_from_secrets"):
+                st.success("✅ **현재 Secrets에서 자동 로드된 쿠키를 사용 중입니다.**")
+
         st.warning(
             "⚠️ **보안 주의**: 이 쿠키는 본인 YouTube 계정 접근 권한이 있어요. "
-            "Streamlit Cloud 세션에만 저장되고 외부로 전송되지 않지만, "
-            "업로드 후 나중에 **YouTube 비밀번호를 바꾸면 자동 무효화**됩니다."
+            "나중에 **YouTube 비밀번호를 바꾸면 자동 무효화**됩니다. "
+            "공용 계정 쿠키 사용을 권장합니다."
         )
         cookies_upload = st.file_uploader(
             "YouTube 쿠키 파일 (.txt)",
