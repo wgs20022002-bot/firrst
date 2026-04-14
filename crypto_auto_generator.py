@@ -1271,6 +1271,13 @@ def extract_youtube_subtitles(video_url: str) -> dict:
             'quiet': True,
             'no_warnings': True,
         }
+        # 쿠키 세션이 있으면 적용 (봇 차단 우회)
+        try:
+            cookies_path = st.session_state.get("youtube_cookies_path", "")
+            if cookies_path and os.path.exists(cookies_path):
+                ydl_opts['cookiefile'] = cookies_path
+        except Exception:
+            pass
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
 
@@ -1590,10 +1597,12 @@ def _get_youtube_video_id(url: str) -> str:
 
 
 def download_source_video(video_url: str, cache_dir: str,
-                           progress_callback=None) -> tuple:
+                           progress_callback=None,
+                           cookies_file: str = "") -> tuple:
     """
     YouTube 영상을 전체 다운로드 (캐시). 여러 yt-dlp client 순차 시도.
-    Streamlit Cloud 봇 차단 회피용 다중 fallback.
+    Streamlit Cloud 봇 차단 회피용 다중 fallback + 쿠키 지원.
+    cookies_file: Netscape 형식 쿠키 파일 경로 (Chrome 확장 'Get cookies.txt LOCALLY'로 export)
     반환: (local_path, error_msg)
     """
     import yt_dlp
@@ -1609,20 +1618,30 @@ def download_source_video(video_url: str, cache_dir: str,
           "AppleWebKit/537.36 (KHTML, like Gecko) "
           "Chrome/124.0.0.0 Safari/537.36")
 
-    # 여러 client 순차 시도 (봇 차단 우회)
-    client_strategies = [
-        (['android'], 'best[height<=360][ext=mp4]/best[height<=480]/best'),
-        (['ios'], 'best[height<=360]/best'),
-        (['tv_embedded'], 'best[height<=360]/best'),
-        (['web_embedded'], 'best[height<=360]/best'),
-        (['mweb'], 'best[height<=360]/best'),
-        (['web'], 'worst[ext=mp4]/worst'),
-    ]
+    # 쿠키가 있으면 web client 우선 (쿠키 효과적), 없으면 mobile 우선
+    has_cookies = bool(cookies_file and os.path.exists(cookies_file))
+    if has_cookies:
+        client_strategies = [
+            (['web'], 'best[height<=720][ext=mp4]/best[height<=480]/best'),
+            (['mweb'], 'best[height<=480]/best'),
+            (['android'], 'best[height<=480]/best'),
+            (['tv_embedded'], 'best[height<=480]/best'),
+        ]
+    else:
+        client_strategies = [
+            (['android'], 'best[height<=360][ext=mp4]/best[height<=480]/best'),
+            (['ios'], 'best[height<=360]/best'),
+            (['tv_embedded'], 'best[height<=360]/best'),
+            (['web_embedded'], 'best[height<=360]/best'),
+            (['mweb'], 'best[height<=360]/best'),
+            (['web'], 'worst[ext=mp4]/worst'),
+        ]
 
     errors = []
     for i, (client, fmt) in enumerate(client_strategies):
         if progress_callback:
-            progress_callback(f"다운로드 시도 {i+1}/{len(client_strategies)} (client={client[0]})")
+            cookie_tag = " +🍪" if has_cookies else ""
+            progress_callback(f"다운로드 시도 {i+1}/{len(client_strategies)} (client={client[0]}{cookie_tag})")
         try:
             ydl_opts = {
                 'format': fmt,
@@ -1637,6 +1656,8 @@ def download_source_video(video_url: str, cache_dir: str,
                 'extractor_args': {'youtube': {'player_client': client}},
                 'merge_output_format': 'mp4',
             }
+            if has_cookies:
+                ydl_opts['cookiefile'] = cookies_file
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([video_url])
             if os.path.exists(cache_path) and os.path.getsize(cache_path) > 100000:
@@ -1651,17 +1672,22 @@ def download_source_video(video_url: str, cache_dir: str,
                     except: pass
             continue
 
-    return "", "모든 client 실패:\n" + "\n".join(errors[:3])
+    hint = ""
+    if not has_cookies:
+        hint = "\n\n💡 **해결책**: 쿠키 업로드 (⚡ 원본 영상 업로드 섹션 → 🍪 YouTube 쿠키 탭)"
+    return "", "모든 client 실패:\n" + "\n".join(errors[:3]) + hint
 
 
 def clip_video_with_ffmpeg(video_url: str, start_sec: float, end_sec: float,
                            save_dir: str, filename: str = "clip",
                            local_source_path: str = "",
-                           progress_callback=None) -> tuple:
+                           progress_callback=None,
+                           cookies_file: str = "") -> tuple:
     """
     영상 클리핑.
     - local_source_path가 제공되면 그 로컬 파일에서 자름
     - 아니면 yt-dlp로 소스 영상 전체 다운로드 (캐시) → ffmpeg 로컬 클리핑
+    - cookies_file: 쿠키 업로드시 사용 (봇 차단 회피)
     반환: (clip_path, error_message)
     """
     error = ""
@@ -1678,7 +1704,8 @@ def clip_video_with_ffmpeg(video_url: str, start_sec: float, end_sec: float,
         else:
             cache_dir = os.path.join(save_dir, "_source_cache")
             source_path, dl_err = download_source_video(
-                video_url, cache_dir, progress_callback=progress_callback
+                video_url, cache_dir, progress_callback=progress_callback,
+                cookies_file=cookies_file,
             )
             if not source_path:
                 return "", f"소스 영상 다운로드 실패: {dl_err}"
@@ -4114,6 +4141,69 @@ with news_tab_clip:
                 st.session_state.pop("uploaded_video_path", None)
                 st.rerun()
 
+    # ══════════════════════════════════════════════
+    #  🍪 YouTube 쿠키 업로드 — 봇 차단 영구 해결
+    # ══════════════════════════════════════════════
+    cookies_status = "🍪 **YouTube 쿠키 업로드 (봇 차단 해결)**"
+    if st.session_state.get("youtube_cookies_path"):
+        cookies_status = "🍪 **YouTube 쿠키 업로드 완료 ✅** (클릭하면 재업로드)"
+    with st.expander(cookies_status, expanded=False):
+        st.markdown(
+            "Streamlit Cloud IP는 YouTube가 'Sign in to confirm you're not a bot'로 차단합니다.  \n"
+            "**해결책**: 본인 브라우저 쿠키를 export해서 업로드하면 yt-dlp가 인증된 요청으로 영상을 받을 수 있어요."
+        )
+        st.markdown(
+            "**📋 쿠키 export 방법 (3분):**\n"
+            "1. Chrome/Edge에 확장 프로그램 설치: "
+            "[**Get cookies.txt LOCALLY**](https://chromewebstore.google.com/detail/get-cookies-txt-locally/cclelndahbckbenkjhflpdbgdldlbecc)\n"
+            "2. YouTube에 **로그인된 상태**에서 https://www.youtube.com 방문\n"
+            "3. 확장 프로그램 아이콘 클릭 → **Export** → `youtube.com_cookies.txt` 저장\n"
+            "4. 아래에 업로드"
+        )
+        st.warning(
+            "⚠️ **보안 주의**: 이 쿠키는 본인 YouTube 계정 접근 권한이 있어요. "
+            "Streamlit Cloud 세션에만 저장되고 외부로 전송되지 않지만, "
+            "업로드 후 나중에 **YouTube 비밀번호를 바꾸면 자동 무효화**됩니다."
+        )
+        cookies_upload = st.file_uploader(
+            "YouTube 쿠키 파일 (.txt)",
+            type=["txt"],
+            key="youtube_cookies_upload",
+            help="Netscape 형식 cookies.txt (Chrome 확장 'Get cookies.txt LOCALLY'로 export)",
+        )
+        if cookies_upload:
+            cookies_dir = os.path.join(DEFAULT_OUTPUT_DIR, "_cookies")
+            os.makedirs(cookies_dir, exist_ok=True)
+            cookies_path = os.path.join(cookies_dir, "youtube_cookies.txt")
+            with open(cookies_path, "wb") as f:
+                f.write(cookies_upload.getbuffer())
+            # 간단한 유효성 검사: Netscape 포맷인지 체크
+            try:
+                with open(cookies_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                if "youtube.com" in content.lower() and ("# Netscape" in content or "\t" in content):
+                    st.session_state["youtube_cookies_path"] = cookies_path
+                    # youtube.com 쿠키 개수 대략 카운트
+                    yt_cookie_count = sum(1 for line in content.split("\n")
+                                           if "youtube.com" in line.lower() and not line.startswith("#"))
+                    st.success(f"✅ 쿠키 업로드 완료! (youtube.com 쿠키 {yt_cookie_count}개 인식)")
+                else:
+                    st.error("❌ 쿠키 파일 형식이 올바르지 않습니다. Netscape 형식(.txt)인지 확인하세요.")
+            except Exception as e:
+                st.error(f"❌ 쿠키 파일 읽기 실패: {e}")
+        elif st.session_state.get("youtube_cookies_path"):
+            col_c1, col_c2 = st.columns(2)
+            with col_c1:
+                st.info("✅ 쿠키 적용 중 (다운로드 시 자동 사용)")
+            with col_c2:
+                if st.button("🗑️ 쿠키 삭제", key="clear_cookies"):
+                    try:
+                        os.remove(st.session_state["youtube_cookies_path"])
+                    except Exception:
+                        pass
+                    st.session_state.pop("youtube_cookies_path", None)
+                    st.rerun()
+
     clip_mode = st.radio(
         "모드 선택",
         ["📺 최신 인터뷰 (추천)", "🔗 URL 직접 입력", "🔍 자동 검색"],
@@ -4202,8 +4292,20 @@ with news_tab_clip:
                 st.session_state["latest_sort_mode_used"] = sort_mode
                 st.success(f"✅ {len(videos)}개 인터뷰 발견!")
 
-        # 집계된 인터뷰 리스트 표시
-        if st.session_state.get("latest_interviews"):
+        # 분석 완료 시 최상단에 큰 배너 + 초기화 버튼
+        if st.session_state.get("clip_quotes"):
+            st.markdown("---")
+            st.success(
+                f"✅ **핵심 발언 {len(st.session_state['clip_quotes'])}개 추출 완료!** "
+                f"↓ **아래 🔥 핵심 발언 섹션**으로 스크롤해서 X 포스트 + 영상 클립을 확인하세요."
+            )
+            if st.button("🔄 다른 인터뷰 분석하기 (현재 결과 초기화)", key="clear_quotes_top"):
+                for k in ["clip_quotes", "clip_subtitles", "clip_video_url"]:
+                    st.session_state.pop(k, None)
+                st.rerun()
+
+        # 집계된 인터뷰 리스트 표시 (quotes가 없을 때만 전체 표시)
+        if st.session_state.get("latest_interviews") and not st.session_state.get("clip_quotes"):
             videos = st.session_state["latest_interviews"]
             used_sort = st.session_state.get("latest_sort_mode_used", "📅 최신순")
             st.markdown(f"### 📋 {used_sort} — 분석할 인터뷰를 선택하세요 ({len(videos)}개)")
@@ -4288,7 +4390,8 @@ with news_tab_clip:
                                         )
                                     else:
                                         st.session_state["clip_quotes"] = quotes
-                                        st.success(f"✅ 자막 추출 + 핵심 발언 {len(quotes)}개 발견!")
+                                        st.success(f"✅ 자막 추출 + 핵심 발언 {len(quotes)}개 발견! ↓ 아래 🔥 핵심 발언 섹션으로 스크롤하세요")
+                                        st.balloons()  # 시각적 완료 신호
                                         st.rerun()
                 st.divider()
 
@@ -4500,20 +4603,28 @@ with news_tab_clip:
                 source_video_path = uploaded_path
                 status.info(f"✅ 업로드된 영상 사용: {os.path.basename(uploaded_path)}")
             else:
-                progress.progress(0.0, text="📥 소스 영상 다운로드 중... (여러 YouTube client 시도)")
+                cookies_path = st.session_state.get("youtube_cookies_path", "")
+                cookie_tag = " + 🍪 쿠키" if cookies_path else ""
+                progress.progress(0.0, text=f"📥 소스 영상 다운로드 중... (여러 YouTube client 시도{cookie_tag})")
                 cache_dir = os.path.join(clip_dir, "_source_cache")
                 def _dl_progress(msg):
                     progress.progress(0.0, text=f"📥 {msg}")
                 source_video_path, source_download_err = download_source_video(
-                    video_url, cache_dir, progress_callback=_dl_progress
+                    video_url, cache_dir, progress_callback=_dl_progress,
+                    cookies_file=cookies_path,
                 )
 
             if not source_video_path:
                 progress.empty()
+                has_cookies = bool(st.session_state.get("youtube_cookies_path"))
+                hint = (
+                    "💡 **권장 해결책**: 위 🍪 **YouTube 쿠키 업로드** 섹션에서 쿠키를 업로드하세요. "
+                    "Streamlit Cloud IP가 YouTube 봇 차단에 걸리면 쿠키 인증이 유일한 우회 방법입니다."
+                    if not has_cookies else
+                    "💡 쿠키도 통하지 않으면 **⚡ 원본 영상 업로드** 섹션에서 MP4를 직접 올리세요."
+                )
                 status.error(
-                    f"❌ 소스 영상 다운로드 실패!\n\n{source_download_err[:500]}\n\n"
-                    "💡 YouTube가 Streamlit Cloud IP를 차단합니다. "
-                    "**⚡ 원본 영상 업로드** 섹션을 사용하거나 로컬 PC에서 앱을 실행하세요."
+                    f"❌ 소스 영상 다운로드 실패!\n\n{source_download_err[:500]}\n\n{hint}"
                 )
                 st.stop()
 
@@ -4689,6 +4800,7 @@ with news_tab_clip:
                                     video_url, start, end,
                                     clip_dir, f"clip_{qi}_{safe_name}",
                                     local_source_path=st.session_state.get("uploaded_video_path", ""),
+                                    cookies_file=st.session_state.get("youtube_cookies_path", ""),
                                 )
                             if clip_path and os.path.exists(clip_path):
                                 with open(clip_path, "rb") as vf:
