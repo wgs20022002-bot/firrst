@@ -1417,9 +1417,32 @@ def _sec_to_hms(seconds: float) -> str:
 def find_quotable_moments_with_claude(api_key: str, video_title: str, subtitle_text: str,
                                        model: str = "claude-sonnet-4-20250514",
                                        num_quotes: int = 5) -> list:
-    """Claude가 자막에서 X 포스팅하기 좋은 핵심 발언을 찾아서 반환"""
+    """Claude가 자막에서 X 포스팅하기 좋은 핵심 발언을 찾아서 반환.
+    실패/파싱 문제 진단을 위해 raw 응답과 에러를 st.session_state['quote_debug']에 저장.
+    """
     import anthropic
-    client = anthropic.Anthropic(api_key=api_key)
+    # 디버그 정보 초기화
+    try:
+        st.session_state["quote_debug"] = {"error": "", "raw": "", "model": model,
+                                            "subtitle_len": len(subtitle_text or "")}
+    except Exception:
+        pass
+
+    if not (subtitle_text or "").strip():
+        try:
+            st.session_state["quote_debug"]["error"] = "자막 텍스트가 비어있습니다."
+        except Exception:
+            pass
+        return []
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+    except Exception as e:
+        try:
+            st.session_state["quote_debug"]["error"] = f"Anthropic 클라이언트 초기화 실패: {e}"
+        except Exception:
+            pass
+        return []
 
     prompt = f"""당신은 크립토/금융 인터뷰 영상에서 X(트위터) 포스팅에 적합한 핵심 발언을 찾는 전문가입니다.
 
@@ -1456,38 +1479,70 @@ POST_TEXT 작성 규칙:
 - 280자 이내
 """
 
-    response = client.messages.create(
-        model=model,
-        max_tokens=4000,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    try:
+        response = client.messages.create(
+            model=model,
+            max_tokens=4000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as e:
+        try:
+            st.session_state["quote_debug"]["error"] = f"Claude API 호출 실패: {type(e).__name__}: {str(e)[:300]}"
+        except Exception:
+            pass
+        return []
 
-    result_text = response.content[0].text
+    try:
+        result_text = response.content[0].text
+    except Exception as e:
+        try:
+            st.session_state["quote_debug"]["error"] = f"응답 파싱 실패: {e}"
+        except Exception:
+            pass
+        return []
+
+    # raw 응답 저장 (디버그용)
+    try:
+        st.session_state["quote_debug"]["raw"] = result_text[:3000]
+    except Exception:
+        pass
+
     quotes = []
 
-    # 파싱
+    # 파싱 (1차: QUOTE_START/END 구분자)
     blocks = result_text.split("===QUOTE_START===")
     for block in blocks[1:]:
         if "===QUOTE_END===" not in block:
             continue
         block = block.split("===QUOTE_END===")[0].strip()
         quote = {}
+        # 멀티라인 필드 지원: 다음 KEY: 가 나올 때까지 이어붙임
+        current_key = None
         for line in block.split("\n"):
-            line = line.strip()
-            if line.startswith("SPEAKER:"):
-                quote["speaker"] = line.replace("SPEAKER:", "").strip()
-            elif line.startswith("ORIGINAL:"):
-                quote["original"] = line.replace("ORIGINAL:", "").strip()
-            elif line.startswith("KOREAN:"):
-                quote["korean"] = line.replace("KOREAN:", "").strip()
-            elif line.startswith("TIMESTAMP_TEXT:"):
-                quote["timestamp_text"] = line.replace("TIMESTAMP_TEXT:", "").strip()
-            elif line.startswith("HOOK:"):
-                quote["hook"] = line.replace("HOOK:", "").strip()
-            elif line.startswith("POST_TEXT:"):
-                quote["post_text"] = line.replace("POST_TEXT:", "").strip()
+            stripped = line.strip()
+            matched = False
+            for key, attr in [("SPEAKER:", "speaker"), ("ORIGINAL:", "original"),
+                              ("KOREAN:", "korean"), ("TIMESTAMP_TEXT:", "timestamp_text"),
+                              ("HOOK:", "hook"), ("POST_TEXT:", "post_text")]:
+                if stripped.startswith(key):
+                    quote[attr] = stripped[len(key):].strip()
+                    current_key = attr
+                    matched = True
+                    break
+            if not matched and current_key and stripped:
+                # 연속 라인 이어붙이기 (POST_TEXT가 여러 줄일 때)
+                quote[current_key] = (quote.get(current_key, "") + "\n" + stripped).strip()
         if quote.get("original") and quote.get("post_text"):
             quotes.append(quote)
+
+    if not quotes:
+        try:
+            st.session_state["quote_debug"]["error"] = (
+                "Claude 응답에서 핵심 발언을 파싱하지 못했습니다. "
+                "(===QUOTE_START===/===QUOTE_END=== 구분자 또는 필수 필드 ORIGINAL/POST_TEXT 누락)"
+            )
+        except Exception:
+            pass
 
     return quotes
 
@@ -4217,9 +4272,24 @@ with news_tab_clip:
                                             model=claude_model,
                                             num_quotes=5,
                                         )
-                                    st.session_state["clip_quotes"] = quotes
-                                    st.success(f"✅ 자막 추출 + 핵심 발언 {len(quotes)}개 발견!")
-                                    st.rerun()
+                                    if not quotes:
+                                        debug = st.session_state.get("quote_debug", {})
+                                        st.error(
+                                            f"❌ 핵심 발언 분석 실패 — {debug.get('error', '알 수 없는 오류')}"
+                                        )
+                                        with st.expander("🔧 디버그 정보 (Claude 응답)", expanded=False):
+                                            st.caption(f"모델: {debug.get('model', '-')} | 자막 길이: {debug.get('subtitle_len', 0)} 문자")
+                                            st.code(debug.get("raw", "(응답 없음)")[:2000] or "(응답 없음)")
+                                        st.info(
+                                            "💡 해결책:\n"
+                                            "- 사이드바의 Claude 모델을 다른 걸로 바꿔보세요\n"
+                                            "- API 키가 올바른지 확인\n"
+                                            "- 자막이 너무 짧으면 분석이 어려울 수 있습니다"
+                                        )
+                                    else:
+                                        st.session_state["clip_quotes"] = quotes
+                                        st.success(f"✅ 자막 추출 + 핵심 발언 {len(quotes)}개 발견!")
+                                        st.rerun()
                 st.divider()
 
     elif clip_mode == "🔗 URL 직접 입력":
@@ -4260,8 +4330,15 @@ with news_tab_clip:
                             model=claude_model,
                             num_quotes=5,
                         )
-                    st.session_state["clip_quotes"] = quotes
-                    st.success(f"🔥 {len(quotes)}개 핵심 발언 발견!")
+                    if not quotes:
+                        debug = st.session_state.get("quote_debug", {})
+                        st.error(f"❌ 핵심 발언 분석 실패 — {debug.get('error', '알 수 없는 오류')}")
+                        with st.expander("🔧 디버그 정보 (Claude 응답)", expanded=False):
+                            st.caption(f"모델: {debug.get('model', '-')} | 자막 길이: {debug.get('subtitle_len', 0)} 문자")
+                            st.code(debug.get("raw", "(응답 없음)")[:2000] or "(응답 없음)")
+                    else:
+                        st.session_state["clip_quotes"] = quotes
+                        st.success(f"🔥 {len(quotes)}개 핵심 발언 발견!")
 
     elif clip_mode == "🔍 자동 검색":  # 🔍 자동 검색 (프리셋 기반)
         st.markdown("**크립토/테슬라 VIP 인물의 최신 인터뷰를 자동 검색합니다.**")
@@ -4369,8 +4446,15 @@ with news_tab_clip:
                                         model=claude_model,
                                         num_quotes=5,
                                     )
-                                st.session_state["clip_quotes"] = quotes
-                                st.success(f"✅ 자막 추출 + 핵심 발언 {len(quotes)}개 발견!")
+                                if not quotes:
+                                    debug = st.session_state.get("quote_debug", {})
+                                    st.error(f"❌ 핵심 발언 분석 실패 — {debug.get('error', '알 수 없는 오류')}")
+                                    with st.expander("🔧 디버그 정보 (Claude 응답)", expanded=False):
+                                        st.caption(f"모델: {debug.get('model', '-')} | 자막 길이: {debug.get('subtitle_len', 0)} 문자")
+                                        st.code(debug.get("raw", "(응답 없음)")[:2000] or "(응답 없음)")
+                                else:
+                                    st.session_state["clip_quotes"] = quotes
+                                    st.success(f"✅ 자막 추출 + 핵심 발언 {len(quotes)}개 발견!")
 
     # ── 핵심 발언 결과 표시 & 클리핑 ──
     if st.session_state.get("clip_quotes"):
