@@ -113,6 +113,38 @@ RSS_FEEDS = {
 
 KOREAN_FEEDS = {"🇰🇷 블록미디어", "🇰🇷 디지털투데이", "🇰🇷 코인리더스"}
 
+
+# ─────────────────────────────────────────────
+#  🌐 YouTube 프록시 헬퍼 (Streamlit Cloud IP 차단 우회)
+#  Secrets의 youtube_proxy 또는 session_state에서 읽어옴
+#  형식: http://user:pass@host:port  또는  socks5://user:pass@host:port
+# ─────────────────────────────────────────────
+def _get_yt_proxy() -> str:
+    """Streamlit session_state 또는 Secrets에서 프록시 URL을 가져옴. 없으면 빈 문자열."""
+    try:
+        import streamlit as _st
+        # 1순위: session_state (런타임 업로드)
+        proxy = _st.session_state.get("youtube_proxy", "")
+        if proxy:
+            return proxy
+        # 2순위: Secrets (영구 저장)
+        if hasattr(_st, "secrets"):
+            proxy = _st.secrets.get("youtube_proxy", "")
+            if proxy:
+                return proxy
+    except Exception:
+        pass
+    return ""
+
+
+def _apply_yt_proxy(ydl_opts: dict) -> dict:
+    """ydl_opts 딕셔너리에 프록시 설정을 주입 (있으면)"""
+    proxy = _get_yt_proxy()
+    if proxy:
+        ydl_opts['proxy'] = proxy
+    return ydl_opts
+
+
 # ─────────────────────────────────────────────
 #  🌟 크립토/정치/매크로 유명 인물 필터
 #  최신 인터뷰 리스트에서 "이 사람이 출연한 영상만" 필터링할 때 사용
@@ -1330,6 +1362,7 @@ def download_video_ytdlp(video_url: str, save_dir: str, filename: str = "video")
             'no_warnings': True,
             'socket_timeout': 30,
         }
+        _apply_yt_proxy(ydl_opts)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
         # 실제 저장된 파일 찾기
@@ -1366,6 +1399,7 @@ def extract_youtube_subtitles(video_url: str) -> dict:
                 ydl_opts['cookiefile'] = cookies_path
         except Exception:
             pass
+        _apply_yt_proxy(ydl_opts)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
 
@@ -1759,6 +1793,7 @@ def download_source_video(video_url: str, cache_dir: str,
             }
             if actual_cookies:
                 ydl_opts['cookiefile'] = cookies_file
+            _apply_yt_proxy(ydl_opts)
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([video_url])
             if os.path.exists(cache_path) and os.path.getsize(cache_path) > 100000:
@@ -1789,6 +1824,7 @@ def download_source_video(video_url: str, cache_dir: str,
         }
         if has_cookies:
             ydl_opts_fallback['cookiefile'] = cookies_file
+        _apply_yt_proxy(ydl_opts_fallback)
         with yt_dlp.YoutubeDL(ydl_opts_fallback) as ydl:
             ydl.download([video_url])
         if os.path.exists(cache_path) and os.path.getsize(cache_path) > 100000:
@@ -1797,11 +1833,20 @@ def download_source_video(video_url: str, cache_dir: str,
         errors.append(f"default: {str(e)[:150]}")
 
     hint = ""
+    has_proxy = bool(_get_yt_proxy())
     if not has_cookies:
         hint = "\n\n💡 **해결책**: 쿠키 업로드 (⚡ 원본 영상 업로드 섹션 → 🍪 YouTube 쿠키 탭)"
+    elif not has_proxy:
+        hint = ("\n\n💡 **Streamlit Cloud IP 차단일 가능성이 높아요.** "
+                "쿠키는 정상이지만 YouTube가 데이터센터 IP를 막고 있습니다.\n\n"
+                "**해결책 1**: Streamlit Secrets에 `youtube_proxy = \"http://user:pass@host:port\"` 추가 "
+                "(DataImpulse / Bright Data 등 Residential Proxy)\n\n"
+                "**해결책 2**: 로컬 PC에서 `streamlit run` 으로 직접 실행\n\n"
+                "**해결책 3**: 로컬에서 yt1s.com으로 받은 MP4를 '⚡ 원본 영상 업로드'에 올리기")
     else:
-        hint = ("\n\n💡 **쿠키가 만료되었을 수 있어요.** YouTube에 다시 로그인 후 "
-                "쿠키를 재export해서 Streamlit Secrets의 `youtube_cookies` 값을 교체해보세요.")
+        hint = ("\n\n💡 **프록시가 동작했지만 실패했어요.** "
+                "프록시 인증 정보 확인 또는 다른 프록시 시도. "
+                "쿠키도 만료되었을 수 있으니 재export 고려.")
     return "", "모든 client 실패:\n" + "\n".join(errors[:5]) + hint
 
 
@@ -1888,6 +1933,7 @@ def _OLD_clip_video_with_ffmpeg_STREAMING(video_url: str, start_sec: float, end_
             'http_headers': {'User-Agent': ua},
             'extractor_args': {'youtube': {'player_client': ['web', 'android']}},
         }
+        _apply_yt_proxy(ydl_opts)
 
         stream_url = ""
         try:
@@ -2382,6 +2428,7 @@ def search_youtube_interviews(query: str, max_results: int = 10,
             'socket_timeout': 20,
             'http_headers': {'User-Agent': ua},
         }
+        _apply_yt_proxy(ydl_opts)
         search_query = f"ytsearch{max_results}:{query}"
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(search_query, download=False)
@@ -4257,6 +4304,71 @@ with news_tab_clip:
                 st.session_state["cookies_from_secrets"] = True
             except Exception:
                 pass
+
+    # ══════════════════════════════════════════════
+    #  🌐 Streamlit Secrets에서 프록시 자동 로드
+    # ══════════════════════════════════════════════
+    # Streamlit Cloud IP 차단 우회용 Residential Proxy URL
+    if not st.session_state.get("youtube_proxy"):
+        try:
+            secret_proxy = st.secrets.get("youtube_proxy", "") if hasattr(st, "secrets") else ""
+            if secret_proxy and isinstance(secret_proxy, str) and len(secret_proxy) > 10:
+                st.session_state["youtube_proxy"] = secret_proxy
+                st.session_state["proxy_from_secrets"] = True
+        except Exception:
+            pass
+
+    # ── 프록시 상태 UI ──
+    proxy_status = "🌐 **YouTube 프록시 (Streamlit Cloud IP 차단 우회)**"
+    if st.session_state.get("youtube_proxy"):
+        if st.session_state.get("proxy_from_secrets"):
+            proxy_status = "🌐 **YouTube 프록시 적용 중 ✅ (Secrets에서 자동 로드 — 영구)**"
+        else:
+            proxy_status = "🌐 **YouTube 프록시 적용 중 ✅ (세션 전용)**"
+    with st.expander(proxy_status, expanded=False):
+        st.markdown(
+            "Streamlit Cloud IP가 YouTube에 차단되어 쿠키로도 해결 안 될 때 사용.\n\n"
+            "**Residential Proxy 서비스 예시**:\n"
+            "- [DataImpulse](https://dataimpulse.com) — 월 $2부터 (가장 저렴)\n"
+            "- [Bright Data](https://brightdata.com) — 프리미엄 (비쌈)\n"
+            "- [Smartproxy](https://smartproxy.com) — 중간급\n\n"
+            "**프록시 URL 형식**:\n"
+            "```\nhttp://USERNAME:PASSWORD@HOST:PORT\n"
+            "socks5://USERNAME:PASSWORD@HOST:PORT\n```"
+        )
+
+        # 영구 저장 가이드
+        st.info(
+            "💾 **영구 저장하려면 Streamlit Secrets에:**\n\n"
+            "```toml\n"
+            "youtube_proxy = \"http://user:pass@proxy.example.com:8080\"\n"
+            "```"
+        )
+
+        proxy_input = st.text_input(
+            "🌐 프록시 URL (세션 전용 — 빠른 테스트용)",
+            value=st.session_state.get("youtube_proxy", "") if not st.session_state.get("proxy_from_secrets") else "",
+            type="password",
+            placeholder="http://user:pass@host:port",
+            help="Secrets 등록 전 임시 테스트용. 앱 재시작하면 사라짐.",
+            key="youtube_proxy_input",
+        )
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            if st.button("🌐 프록시 적용 (세션)", key="apply_proxy"):
+                if proxy_input and len(proxy_input) > 10:
+                    st.session_state["youtube_proxy"] = proxy_input
+                    st.session_state["proxy_from_secrets"] = False
+                    st.success("✅ 프록시 적용됨 (이 세션만)")
+                    st.rerun()
+                else:
+                    st.warning("프록시 URL을 입력하세요.")
+        with col_p2:
+            if st.session_state.get("youtube_proxy") and not st.session_state.get("proxy_from_secrets"):
+                if st.button("🗑️ 프록시 제거", key="clear_proxy"):
+                    st.session_state.pop("youtube_proxy", None)
+                    st.session_state.pop("proxy_from_secrets", None)
+                    st.rerun()
 
     # ── 원본 영상 파일 업로드 (선택) ──
     # Streamlit Cloud는 YouTube 봇 차단으로 스트리밍 다운로드가 자주 실패함.
