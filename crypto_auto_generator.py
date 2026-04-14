@@ -1482,13 +1482,79 @@ def _get_youtube_video_id(url: str) -> str:
     return ""
 
 
+def download_source_video(video_url: str, cache_dir: str,
+                           progress_callback=None) -> tuple:
+    """
+    YouTube 영상을 전체 다운로드 (캐시). 여러 yt-dlp client 순차 시도.
+    Streamlit Cloud 봇 차단 회피용 다중 fallback.
+    반환: (local_path, error_msg)
+    """
+    import yt_dlp
+    os.makedirs(cache_dir, exist_ok=True)
+    vid_id = _get_youtube_video_id(video_url) or "video"
+    cache_path = os.path.join(cache_dir, f"source_{vid_id}.mp4")
+
+    # 이미 다운로드된 경우
+    if os.path.exists(cache_path) and os.path.getsize(cache_path) > 100000:
+        return cache_path, ""
+
+    ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+          "AppleWebKit/537.36 (KHTML, like Gecko) "
+          "Chrome/124.0.0.0 Safari/537.36")
+
+    # 여러 client 순차 시도 (봇 차단 우회)
+    client_strategies = [
+        (['android'], 'best[height<=360][ext=mp4]/best[height<=480]/best'),
+        (['ios'], 'best[height<=360]/best'),
+        (['tv_embedded'], 'best[height<=360]/best'),
+        (['web_embedded'], 'best[height<=360]/best'),
+        (['mweb'], 'best[height<=360]/best'),
+        (['web'], 'worst[ext=mp4]/worst'),
+    ]
+
+    errors = []
+    for i, (client, fmt) in enumerate(client_strategies):
+        if progress_callback:
+            progress_callback(f"다운로드 시도 {i+1}/{len(client_strategies)} (client={client[0]})")
+        try:
+            ydl_opts = {
+                'format': fmt,
+                'outtmpl': cache_path,
+                'noplaylist': True,
+                'quiet': True,
+                'no_warnings': True,
+                'socket_timeout': 60,
+                'retries': 2,
+                'fragment_retries': 2,
+                'http_headers': {'User-Agent': ua},
+                'extractor_args': {'youtube': {'player_client': client}},
+                'merge_output_format': 'mp4',
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([video_url])
+            if os.path.exists(cache_path) and os.path.getsize(cache_path) > 100000:
+                return cache_path, ""
+        except Exception as e:
+            errors.append(f"{client[0]}: {str(e)[:100]}")
+            # 실패한 부분 파일 제거
+            for ext in [".mp4", ".webm", ".mkv", ".part"]:
+                p = cache_path.replace(".mp4", ext)
+                if os.path.exists(p) and os.path.getsize(p) < 100000:
+                    try: os.remove(p)
+                    except: pass
+            continue
+
+    return "", "모든 client 실패:\n" + "\n".join(errors[:3])
+
+
 def clip_video_with_ffmpeg(video_url: str, start_sec: float, end_sec: float,
                            save_dir: str, filename: str = "clip",
-                           local_source_path: str = "") -> tuple:
+                           local_source_path: str = "",
+                           progress_callback=None) -> tuple:
     """
     영상 클리핑.
-    - local_source_path가 제공되면 그 로컬 파일에서 자름 (100% 작동)
-    - 아니면 yt-dlp로 스트림 URL 추출 후 ffmpeg로 구간만 스트리밍 클리핑
+    - local_source_path가 제공되면 그 로컬 파일에서 자름
+    - 아니면 yt-dlp로 소스 영상 전체 다운로드 (캐시) → ffmpeg 로컬 클리핑
     반환: (clip_path, error_message)
     """
     error = ""
@@ -1498,30 +1564,54 @@ def clip_video_with_ffmpeg(video_url: str, start_sec: float, end_sec: float,
         clip_path = os.path.join(save_dir, f"{filename}.mp4")
         duration = max(1.0, float(end_sec) - float(start_sec))
 
-        # ═══ A) 업로드된 로컬 영상 파일 사용 (최우선) ═══
+        # ═══ 소스 영상 결정: 업로드 파일 > 다운로드 캐시 ═══
+        source_path = ""
         if local_source_path and os.path.exists(local_source_path):
-            cmd = [
-                "ffmpeg", "-y",
-                "-ss", str(max(0, start_sec - 0.3)),
-                "-i", local_source_path,
-                "-t", str(duration + 0.6),
-                "-c:v", "libx264",
-                "-c:a", "aac",
-                "-preset", "veryfast",
-                "-crf", "23",
-                "-movflags", "+faststart",
-                "-loglevel", "error",
-                clip_path,
-            ]
-            proc = subprocess.run(cmd, capture_output=True, timeout=120)
-            if proc.returncode != 0:
-                error = f"ffmpeg(로컬) 실패: {proc.stderr.decode('utf-8', errors='ignore')[:200]}"
-            if os.path.exists(clip_path) and os.path.getsize(clip_path) > 1000:
-                return clip_path, ""
-            return "", (error or "로컬 클리핑 실패")
+            source_path = local_source_path
+        else:
+            cache_dir = os.path.join(save_dir, "_source_cache")
+            source_path, dl_err = download_source_video(
+                video_url, cache_dir, progress_callback=progress_callback
+            )
+            if not source_path:
+                return "", f"소스 영상 다운로드 실패: {dl_err}"
 
-        # ═══ B) yt-dlp 스트림 URL 추출 방식 ═══
+        # ═══ ffmpeg로 로컬 파일 클리핑 (100% 작동) ═══
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", str(max(0, start_sec - 0.3)),
+            "-i", source_path,
+            "-t", str(duration + 0.6),
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-preset", "veryfast",
+            "-crf", "24",
+            "-movflags", "+faststart",
+            "-loglevel", "error",
+            clip_path,
+        ]
+        proc = subprocess.run(cmd, capture_output=True, timeout=180)
+        if proc.returncode != 0:
+            error = f"ffmpeg 실패: {proc.stderr.decode('utf-8', errors='ignore')[:200]}"
+
+        if os.path.exists(clip_path) and os.path.getsize(clip_path) > 1000:
+            return clip_path, ""
+        return "", (error or "클리핑 실패")
+
+    except Exception as e:
+        return "", f"예외: {str(e)[:200]}"
+
+
+def _OLD_clip_video_with_ffmpeg_STREAMING(video_url: str, start_sec: float, end_sec: float,
+                           save_dir: str, filename: str = "clip") -> tuple:
+    """(deprecated) 스트리밍 방식 — 403 오류로 비활성화"""
+    error = ""
+    try:
         import yt_dlp
+        import subprocess
+        os.makedirs(save_dir, exist_ok=True)
+        clip_path = os.path.join(save_dir, f"{filename}.mp4")
+        duration = max(1.0, float(end_sec) - float(start_sec))
 
         # 1) yt-dlp로 직접 스트림 URL 추출 (다운로드 X)
         ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -1608,14 +1698,108 @@ def search_youtube_interviews(query: str, max_results: int = 10,
         "Cookie": "CONSENT=YES+cb; SOCS=CAI",  # YouTube consent 회피
     }
 
-    def _add(vid, title, pub=""):
+    def _fmt_upload_date(s):
+        """'20260314' → '2026-03-14' 형식으로"""
+        if not s:
+            return ""
+        s = str(s)
+        if len(s) == 8 and s.isdigit():
+            return f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+        return s
+
+    def _fmt_published_ts(ts):
+        """unix timestamp → 상대 시간 (예: '3일 전', '2개월 전')"""
+        try:
+            import datetime
+            ts = int(ts)
+            now = datetime.datetime.now().timestamp()
+            diff = now - ts
+            if diff < 0:
+                return ""
+            if diff < 3600:
+                return f"{int(diff/60)}분 전"
+            if diff < 86400:
+                return f"{int(diff/3600)}시간 전"
+            if diff < 86400 * 30:
+                return f"{int(diff/86400)}일 전"
+            if diff < 86400 * 365:
+                return f"{int(diff/86400/30)}개월 전"
+            return f"{int(diff/86400/365)}년 전"
+        except Exception:
+            return ""
+
+    def _fmt_views(v):
+        try:
+            v = int(v)
+            if v >= 1_000_000:
+                return f"{v/1_000_000:.1f}M회"
+            if v >= 1_000:
+                return f"{v/1_000:.1f}K회"
+            return f"{v}회"
+        except Exception:
+            return ""
+
+    def _fmt_duration(sec):
+        try:
+            sec = int(sec)
+            if sec <= 0:
+                return ""
+            m, s = divmod(sec, 60)
+            h, m = divmod(m, 60)
+            return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+        except Exception:
+            return ""
+
+    def _add(vid, title, pub="", views="", duration="", channel=""):
         if vid and vid not in seen_ids:
             seen_ids.add(vid)
+            # meta 문자열 조합: "📅 2026-03-14 · 👁 123K회 · ⏱ 1:23:45 · 📺 채널"
+            meta_parts = []
+            if pub:
+                meta_parts.append(f"📅 {pub}")
+            if views:
+                meta_parts.append(f"👁 {views}")
+            if duration:
+                meta_parts.append(f"⏱ {duration}")
+            if channel:
+                meta_parts.append(f"📺 {channel}")
             results.append({
                 "title": clean_text(title) or f"YouTube 영상 ({vid})",
                 "url": f"https://www.youtube.com/watch?v={vid}",
-                "published": pub,
+                "published": " · ".join(meta_parts),
             })
+
+    # ───────── 0) YouTube HTML에서 videoId → publishedTimeText 매핑 사전 확보 ─────────
+    published_map = {}  # {videoId: "3 days ago"}
+    try:
+        search_url = (
+            f"https://www.youtube.com/results?"
+            f"search_query={urllib.parse.quote(query)}"
+        )
+        resp = requests.get(search_url, headers=headers, timeout=12)
+        if resp.status_code == 200:
+            # videoRenderer 블록에서 videoId와 publishedTimeText 함께 추출
+            pattern_pub = re.compile(
+                r'"videoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})"'
+                r'.*?"publishedTimeText":\{"simpleText":"([^"]+)"',
+                re.DOTALL,
+            )
+            for m in pattern_pub.finditer(resp.text):
+                vid, pub_txt = m.group(1), m.group(2)
+                # "3 days ago" → "3일 전" 간단 번역
+                pub_ko = (pub_txt
+                          .replace("year ago", "년 전").replace("years ago", "년 전")
+                          .replace("month ago", "개월 전").replace("months ago", "개월 전")
+                          .replace("week ago", "주 전").replace("weeks ago", "주 전")
+                          .replace("day ago", "일 전").replace("days ago", "일 전")
+                          .replace("hour ago", "시간 전").replace("hours ago", "시간 전")
+                          .replace("minute ago", "분 전").replace("minutes ago", "분 전")
+                          .replace("Streamed", "🔴 스트리밍"))
+                if vid not in published_map:
+                    published_map[vid] = pub_ko
+            debug_log.append(f"date-map: {len(published_map)}건")
+    except Exception as e:
+        debug_log.append(f"date-map 실패: {str(e)[:60]}")
 
     # ───────── 1) yt-dlp ytsearch (Streamlit Cloud에서 가장 안정적) ─────────
     try:
@@ -1637,7 +1821,20 @@ def search_youtube_interviews(query: str, max_results: int = 10,
             for e in entries:
                 vid = e.get("id") or ""
                 title = e.get("title", "")
-                _add(vid, title)
+                # 업로드 날짜: HTML 맵 → yt-dlp 필드 순으로 시도
+                pub = published_map.get(vid, "")
+                if not pub:
+                    upload_date = e.get("upload_date") or e.get("release_date") or ""
+                    if upload_date:
+                        pub = _fmt_upload_date(upload_date)
+                    elif e.get("timestamp"):
+                        pub = _fmt_published_ts(e.get("timestamp"))
+                    elif e.get("release_timestamp"):
+                        pub = _fmt_published_ts(e.get("release_timestamp"))
+                views = _fmt_views(e.get("view_count", 0))
+                dur = _fmt_duration(e.get("duration", 0))
+                ch = e.get("channel") or e.get("uploader") or ""
+                _add(vid, title, pub, views, dur, ch)
                 if len(results) >= max_results:
                     break
     except Exception as e:
@@ -1661,7 +1858,12 @@ def search_youtube_interviews(query: str, max_results: int = 10,
                     for item in data[:max_results]:
                         vid = item.get("videoId", "")
                         title = item.get("title", "")
-                        _add(vid, title, str(item.get("published", "")))
+                        # Invidious는 publishedText("2 months ago") 또는 published(ts) 제공
+                        pub = item.get("publishedText", "") or _fmt_published_ts(item.get("published", 0))
+                        views = _fmt_views(item.get("viewCount", 0))
+                        dur = _fmt_duration(item.get("lengthSeconds", 0))
+                        ch = item.get("author", "")
+                        _add(vid, title, pub, views, dur, ch)
                         if len(results) >= max_results:
                             break
                     if results:
@@ -3659,6 +3861,35 @@ with news_tab_clip:
             status = st.empty()
             clip_results = []  # [(filename, bytes, post_text, ok, err)]
 
+            # ═══ STEP 0: 소스 영상 1번만 다운로드 (이후 모든 구간은 이 파일에서 자름) ═══
+            uploaded_path = st.session_state.get("uploaded_video_path", "")
+            source_video_path = ""
+            source_download_err = ""
+
+            if uploaded_path and os.path.exists(uploaded_path):
+                source_video_path = uploaded_path
+                status.info(f"✅ 업로드된 영상 사용: {os.path.basename(uploaded_path)}")
+            else:
+                progress.progress(0.0, text="📥 소스 영상 다운로드 중... (여러 YouTube client 시도)")
+                cache_dir = os.path.join(clip_dir, "_source_cache")
+                def _dl_progress(msg):
+                    progress.progress(0.0, text=f"📥 {msg}")
+                source_video_path, source_download_err = download_source_video(
+                    video_url, cache_dir, progress_callback=_dl_progress
+                )
+
+            if not source_video_path:
+                progress.empty()
+                status.error(
+                    f"❌ 소스 영상 다운로드 실패!\n\n{source_download_err[:500]}\n\n"
+                    "💡 YouTube가 Streamlit Cloud IP를 차단합니다. "
+                    "**⚡ 원본 영상 업로드** 섹션을 사용하거나 로컬 PC에서 앱을 실행하세요."
+                )
+                st.stop()
+
+            src_size_mb = os.path.getsize(source_video_path) / 1024 / 1024
+            status.success(f"✅ 소스 영상 준비 완료 ({src_size_mb:.1f} MB) — 이제 {len(quotes)}개 구간 클리핑 시작")
+
             for idx, q in enumerate(quotes):
                 speaker = q.get("speaker", "speaker")
                 safe_name = re.sub(r'[^\w]', '', speaker)[:20] or f"quote{idx+1}"
@@ -3676,7 +3907,7 @@ with news_tab_clip:
                     clip_path, err = clip_video_with_ffmpeg(
                         video_url, start, end,
                         clip_dir, f"clip_{idx+1}_{safe_name}",
-                        local_source_path=st.session_state.get("uploaded_video_path", ""),
+                        local_source_path=source_video_path,  # 이미 다운로드한 로컬 파일
                     )
                     if clip_path and os.path.exists(clip_path):
                         with open(clip_path, "rb") as f:
