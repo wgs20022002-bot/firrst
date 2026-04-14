@@ -1466,53 +1466,96 @@ def find_timestamp_for_quote(segments: list, quote_text: str) -> tuple:
     return (best_match[0], best_match[1])
 
 
+def _get_youtube_video_id(url: str) -> str:
+    """유튜브 URL에서 video ID 추출"""
+    try:
+        if "youtu.be/" in url:
+            return url.split("youtu.be/")[1].split("?")[0].split("&")[0]
+        if "watch?v=" in url:
+            return url.split("watch?v=")[1].split("&")[0]
+        if "/shorts/" in url:
+            return url.split("/shorts/")[1].split("?")[0]
+        if "/embed/" in url:
+            return url.split("/embed/")[1].split("?")[0]
+    except Exception:
+        pass
+    return ""
+
+
 def clip_video_with_ffmpeg(video_url: str, start_sec: float, end_sec: float,
-                           save_dir: str, filename: str = "clip") -> str:
-    """yt-dlp로 다운로드 후 ffmpeg로 클리핑"""
+                           save_dir: str, filename: str = "clip") -> tuple:
+    """
+    yt-dlp로 **스트림 URL만 얻어서** ffmpeg가 필요한 구간만 스트리밍해서 클리핑.
+    전체 영상을 다운로드하지 않으므로 Streamlit Cloud에서도 작동 가능.
+    반환: (clip_path, error_message)
+    """
+    error = ""
     try:
         import yt_dlp
         import subprocess
 
         os.makedirs(save_dir, exist_ok=True)
-
-        # 1) 전체 영상 다운로드 (이미 있으면 스킵)
-        full_path = os.path.join(save_dir, "full_video.mp4")
-        if not os.path.exists(full_path):
-            ydl_opts = {
-                'format': 'best[ext=mp4][height<=720]/best[ext=mp4]/best',
-                'outtmpl': full_path,
-                'noplaylist': True,
-                'quiet': True,
-                'no_warnings': True,
-                'socket_timeout': 60,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([video_url])
-
-        if not os.path.exists(full_path):
-            return ""
-
-        # 2) ffmpeg로 클리핑
         clip_path = os.path.join(save_dir, f"{filename}.mp4")
-        duration = end_sec - start_sec
+
+        # 1) yt-dlp로 직접 스트림 URL 추출 (다운로드 X)
+        ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+              "AppleWebKit/537.36 (KHTML, like Gecko) "
+              "Chrome/124.0.0.0 Safari/537.36")
+        ydl_opts = {
+            'format': 'best[ext=mp4][height<=480]/best[height<=480]/best[ext=mp4]/best',
+            'quiet': True,
+            'no_warnings': True,
+            'socket_timeout': 30,
+            'noplaylist': True,
+            'skip_download': True,
+            'http_headers': {'User-Agent': ua},
+            'extractor_args': {'youtube': {'player_client': ['web', 'android']}},
+        }
+
+        stream_url = ""
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(video_url, download=False)
+                stream_url = info.get("url", "") if info else ""
+                # formats에서 fallback
+                if not stream_url and info and info.get("formats"):
+                    for f in info["formats"]:
+                        if f.get("ext") == "mp4" and f.get("url") and f.get("vcodec") != "none":
+                            stream_url = f["url"]
+                            break
+        except Exception as e:
+            error = f"yt-dlp 추출 실패: {str(e)[:120]}"
+            return "", error
+
+        if not stream_url:
+            error = "스트림 URL을 얻지 못했습니다 (YouTube 봇 차단 가능)"
+            return "", error
+
+        # 2) ffmpeg로 해당 구간만 스트리밍 클리핑 (-ss before -i = fast seek)
+        duration = max(1.0, float(end_sec) - float(start_sec))
         cmd = [
             "ffmpeg", "-y",
-            "-ss", str(start_sec),
-            "-i", full_path,
-            "-t", str(duration),
+            "-user_agent", ua,
+            "-ss", str(max(0, start_sec - 0.5)),
+            "-i", stream_url,
+            "-t", str(duration + 1.0),
             "-c:v", "libx264",
             "-c:a", "aac",
-            "-preset", "fast",
+            "-preset", "veryfast",
+            "-crf", "26",
             "-movflags", "+faststart",
+            "-loglevel", "error",
             clip_path,
         ]
-        subprocess.run(cmd, capture_output=True, timeout=120)
+        proc = subprocess.run(cmd, capture_output=True, timeout=180)
+        if proc.returncode != 0:
+            error = f"ffmpeg 실패: {proc.stderr.decode('utf-8', errors='ignore')[:200]}"
 
         if os.path.exists(clip_path) and os.path.getsize(clip_path) > 1000:
-            return clip_path
-    except Exception:
-        pass
-    return ""
+            return clip_path, ""
+    except Exception as e:
+        error = f"예외: {str(e)[:200]}"
+    return "", (error or "알 수 없는 오류")
 
 
 def search_youtube_interviews(query: str, max_results: int = 10) -> list:
@@ -3389,12 +3432,29 @@ with news_tab_clip:
                     if start > 0 or end > 0:
                         st.caption(f"⏱️ 예상 구간: {_sec_to_hms(start)} ~ {_sec_to_hms(end)}")
 
-                        # 영상 클리핑
-                        if st.button(f"🎬 이 구간 영상 클리핑 ({_sec_to_hms(start)}~{_sec_to_hms(end)})", key=f"clip_{qi}"):
-                            with st.spinner(f"🎬 영상 다운로드 & 클리핑 중... (시간이 좀 걸릴 수 있습니다)"):
+                        # 🎯 우선 YouTube 타임스탬프 임베드/링크 (항상 동작)
+                        vid_id = _get_youtube_video_id(video_url)
+                        ts_start = int(max(0, start))
+                        ts_url = f"https://youtu.be/{vid_id}?t={ts_start}" if vid_id else video_url
+                        col_embed1, col_embed2 = st.columns([3, 2])
+                        with col_embed1:
+                            if vid_id:
+                                try:
+                                    st.video(f"https://www.youtube.com/watch?v={vid_id}", start_time=ts_start)
+                                except Exception:
+                                    st.markdown(f"[▶️ {_sec_to_hms(start)}부터 재생]({ts_url})")
+                            else:
+                                st.markdown(f"[▶️ {_sec_to_hms(start)}부터 재생]({ts_url})")
+                        with col_embed2:
+                            st.markdown(f"🔗 **타임스탬프 링크**\n\n[{_sec_to_hms(start)}부터 보기]({ts_url})")
+                            st.code(ts_url, language=None)
+
+                        # 🎬 MP4 클립 파일 생성 (스트리밍 방식, 실패 가능)
+                        if st.button(f"📥 MP4 클립 파일 만들기 ({_sec_to_hms(start)}~{_sec_to_hms(end)})", key=f"clip_{qi}"):
+                            with st.spinner("🎬 스트리밍 클리핑 중... (30초 내외)"):
                                 clip_dir = os.path.join(DEFAULT_OUTPUT_DIR, "클립")
                                 safe_name = re.sub(r'[^\w]', '', quote.get("speaker", "clip"))[:20]
-                                clip_path = clip_video_with_ffmpeg(
+                                clip_path, err_msg = clip_video_with_ffmpeg(
                                     video_url, start, end,
                                     clip_dir, f"clip_{qi}_{safe_name}"
                                 )
@@ -3409,10 +3469,14 @@ with news_tab_clip:
                                     mime="video/mp4",
                                     key=f"dl_clip_{qi}",
                                 )
-                                st.success("✅ 클리핑 완료! 위 버튼으로 다운로드하세요.")
+                                st.success("✅ 클리핑 완료!")
                             else:
-                                st.warning("클리핑 실패. Streamlit Cloud에서는 영상 다운로드가 제한될 수 있습니다.")
-                                st.markdown(f"**수동 클리핑:** YouTube에서 {_sec_to_hms(start)}~{_sec_to_hms(end)} 구간을 직접 녹화하세요.")
+                                st.warning(f"⚠️ MP4 클리핑 실패: {err_msg}")
+                                st.info(
+                                    "💡 Streamlit Cloud는 YouTube 봇 차단으로 다운로드가 제한될 수 있어요. "
+                                    "위의 **타임스탬프 임베드/링크**를 사용하거나, 로컬 PC에서 앱을 돌리세요.\n\n"
+                                    f"수동 방법: YouTube에서 `{ts_url}` 구간을 화면 녹화하세요."
+                                )
 
                 # 포스트 다운로드
                 dl_text = f"{post_text}\n\n─────────\n원문: \"{quote.get('original', '')}\"\n발언자: {quote.get('speaker', '')}"
