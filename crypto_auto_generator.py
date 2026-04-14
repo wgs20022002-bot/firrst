@@ -1558,63 +1558,165 @@ def clip_video_with_ffmpeg(video_url: str, start_sec: float, end_sec: float,
     return "", (error or "알 수 없는 오류")
 
 
-def search_youtube_interviews(query: str, max_results: int = 10) -> list:
-    """YouTube에서 크립토 인터뷰 영상 검색 (RSS 기반)"""
+def search_youtube_interviews(query: str, max_results: int = 10,
+                               debug: bool = False) -> list:
+    """
+    YouTube 인터뷰 영상 검색 — 4단계 fallback.
+    Streamlit Cloud IP가 YouTube에 차단되는 경우가 많아 여러 경로로 시도.
+    1) yt-dlp ytsearch (가장 안정적)
+    2) Invidious 공개 인스턴스 API
+    3) YouTube HTML 스크레이핑
+    4) Google News RSS
+    debug=True면 results에 '_debug' 항목도 포함.
+    """
     results = []
+    seen_ids = set()
+    debug_log = []
+    ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+          "AppleWebKit/537.36 (KHTML, like Gecko) "
+          "Chrome/124.0.0.0 Safari/537.36")
+    headers = {
+        "User-Agent": ua,
+        "Accept-Language": "en-US,en;q=0.9,ko;q=0.8",
+        "Accept": "text/html,application/xhtml+xml",
+        "Cookie": "CONSENT=YES+cb; SOCS=CAI",  # YouTube consent 회피
+    }
+
+    def _add(vid, title, pub=""):
+        if vid and vid not in seen_ids:
+            seen_ids.add(vid)
+            results.append({
+                "title": clean_text(title) or f"YouTube 영상 ({vid})",
+                "url": f"https://www.youtube.com/watch?v={vid}",
+                "published": pub,
+            })
+
+    # ───────── 1) yt-dlp ytsearch (Streamlit Cloud에서 가장 안정적) ─────────
     try:
-        search_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query)}&sp=CAISBAgCEAE"  # 이번 주 + 영상
-        # YouTube RSS로 검색 (Google News RSS 활용)
-        rss_url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}+site:youtube.com+when:7d&hl=en-US&gl=US&ceid=US:en"
-        feed = feedparser.parse(rss_url)
+        import yt_dlp
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'skip_download': True,
+            'extract_flat': True,
+            'default_search': 'ytsearch',
+            'socket_timeout': 20,
+            'http_headers': {'User-Agent': ua},
+        }
+        search_query = f"ytsearch{max_results}:{query}"
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(search_query, download=False)
+            entries = (info or {}).get("entries", []) or []
+            debug_log.append(f"yt-dlp: {len(entries)}건")
+            for e in entries:
+                vid = e.get("id") or ""
+                title = e.get("title", "")
+                _add(vid, title)
+                if len(results) >= max_results:
+                    break
+    except Exception as e:
+        debug_log.append(f"yt-dlp 실패: {str(e)[:80]}")
 
-        for entry in feed.entries[:max_results]:
-            link = entry.get("link", "")
-            title = clean_text(entry.get("title", ""))
-            published = entry.get("published", "")
-
-            # YouTube 링크 추출
-            yt_url = ""
-            if "youtube.com" in link:
-                yt_url = link
-            elif entry.get("links"):
-                for l in entry["links"]:
-                    href = l.get("href", "")
-                    if "youtube.com" in href:
-                        yt_url = href
+    # ───────── 2) Invidious 공개 인스턴스 JSON API ─────────
+    if len(results) < 3:
+        invidious_instances = [
+            "https://yewtu.be",
+            "https://invidious.nerdvpn.de",
+            "https://invidious.privacyredirect.com",
+            "https://inv.nadeko.net",
+        ]
+        for inst in invidious_instances:
+            try:
+                api = f"{inst}/api/v1/search?q={urllib.parse.quote(query)}&type=video"
+                r = requests.get(api, headers={"User-Agent": ua}, timeout=10)
+                if r.status_code == 200:
+                    data = r.json()
+                    debug_log.append(f"invidious {inst}: {len(data)}건")
+                    for item in data[:max_results]:
+                        vid = item.get("videoId", "")
+                        title = item.get("title", "")
+                        _add(vid, title, str(item.get("published", "")))
+                        if len(results) >= max_results:
+                            break
+                    if results:
                         break
+            except Exception as e:
+                debug_log.append(f"inv {inst[:25]} 실패: {str(e)[:50]}")
+                continue
 
-            # Google News 리다이렉트에서 실제 URL 추출
-            if not yt_url and "news.google.com" in link:
-                try:
-                    resp = requests.head(link, allow_redirects=True, timeout=5)
-                    if "youtube.com" in resp.url:
-                        yt_url = resp.url
-                except Exception:
-                    pass
+    # ───────── 3) YouTube HTML 직접 스크레이핑 ─────────
+    if len(results) < 3:
+        try:
+            search_url = (
+                f"https://www.youtube.com/results?"
+                f"search_query={urllib.parse.quote(query)}"
+            )
+            resp = requests.get(search_url, headers=headers, timeout=15)
+            debug_log.append(f"yt-html: status={resp.status_code} len={len(resp.text)}")
+            if resp.status_code == 200:
+                html = resp.text
+                pattern = re.compile(
+                    r'"videoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})"'
+                    r'.*?"title":\{"runs":\[\{"text":"([^"]+)"',
+                    re.DOTALL,
+                )
+                count = 0
+                for m in pattern.finditer(html):
+                    vid = m.group(1)
+                    title = m.group(2).encode().decode("unicode_escape", errors="ignore")
+                    _add(vid, title)
+                    count += 1
+                    if len(results) >= max_results:
+                        break
+                debug_log.append(f"yt-html 매치: {count}건")
+                # fallback: videoId만
+                if len(results) < 3:
+                    for vid in re.findall(r'"videoId":"([a-zA-Z0-9_-]{11})"', html):
+                        _add(vid, "")
+                        if len(results) >= max_results:
+                            break
+        except Exception as e:
+            debug_log.append(f"yt-html 실패: {str(e)[:80]}")
 
-            if yt_url:
-                results.append({
-                    "title": title,
-                    "url": yt_url,
-                    "published": published,
-                })
-
-        # 추가: 직접 YouTube RSS 검색
-        if len(results) < 3:
-            yt_rss = f"https://www.youtube.com/feeds/videos.xml?search_query={urllib.parse.quote(query)}"
-            feed2 = feedparser.parse(yt_rss)
-            for entry in feed2.entries[:5]:
+    # ───────── 4) Google News RSS fallback ─────────
+    if len(results) < 3:
+        try:
+            rss_url = (
+                f"https://news.google.com/rss/search?"
+                f"q={urllib.parse.quote(query + ' site:youtube.com')}"
+                f"&hl=en-US&gl=US&ceid=US:en"
+            )
+            feed = feedparser.parse(rss_url)
+            debug_log.append(f"gnews: {len(feed.entries)}건")
+            for entry in feed.entries[:max_results]:
                 link = entry.get("link", "")
                 title = clean_text(entry.get("title", ""))
-                if link and link not in [r["url"] for r in results]:
-                    results.append({
-                        "title": title,
-                        "url": link,
-                        "published": entry.get("published", ""),
-                    })
+                yt_url = ""
+                if "youtube.com/watch" in link or "youtu.be/" in link:
+                    yt_url = link
+                elif link:
+                    try:
+                        rr = requests.get(link, headers=headers,
+                                           allow_redirects=True, timeout=6)
+                        if "youtube.com" in rr.url or "youtu.be" in rr.url:
+                            yt_url = rr.url
+                    except Exception:
+                        pass
+                if yt_url:
+                    vid = _get_youtube_video_id(yt_url)
+                    _add(vid, title, entry.get("published", ""))
+        except Exception as e:
+            debug_log.append(f"gnews 실패: {str(e)[:80]}")
 
-    except Exception:
-        pass
+    if debug and not results:
+        # 디버그 정보를 첫 결과에 첨부
+        results.append({
+            "title": "[DEBUG] " + " | ".join(debug_log),
+            "url": "",
+            "published": "",
+            "_debug": True,
+        })
+
     return results
 
 
@@ -3356,14 +3458,25 @@ with news_tab_clip:
 
         if st.button("🔍 인터뷰 검색", type="primary", use_container_width=True, key="search_interviews"):
             query = custom_query if custom_query else search_presets[selected_preset]
-            with st.spinner(f"🔍 '{query}' 검색 중..."):
-                results = search_youtube_interviews(query, max_results=10)
+            with st.spinner(f"🔍 '{query}' 검색 중... (yt-dlp → Invidious → HTML → RSS 순)"):
+                results = search_youtube_interviews(query, max_results=10, debug=True)
 
-            if results:
-                st.session_state["clip_search_results"] = results
-                st.success(f"✅ {len(results)}개 영상 발견!")
+            # debug-only 결과 걸러내기
+            real_results = [r for r in results if not r.get("_debug")]
+            debug_results = [r for r in results if r.get("_debug")]
+
+            if real_results:
+                st.session_state["clip_search_results"] = real_results
+                st.success(f"✅ {len(real_results)}개 영상 발견!")
             else:
-                st.warning("검색 결과가 없습니다. 다른 검색어를 시도해보세요.")
+                st.warning("⚠️ 검색 결과가 없습니다.")
+                if debug_results:
+                    with st.expander("🔧 디버그 정보 (어느 단계에서 실패했는지)", expanded=True):
+                        st.code(debug_results[0]["title"])
+                st.info(
+                    "💡 원인: Streamlit Cloud IP가 YouTube/Invidious에서 차단되거나 rate-limit일 수 있어요.\n"
+                    "- 해결: 다른 검색어로 재시도하거나, **🔗 URL 직접 입력** 모드로 유튜브 링크를 직접 넣어주세요."
+                )
 
         # 검색 결과 표시
         if st.session_state.get("clip_search_results"):
