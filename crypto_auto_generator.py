@@ -83,6 +83,32 @@ RSS_FEEDS = {
     "🇰🇷 블록미디어":      "https://www.blockmedia.co.kr/feed/",
     "🇰🇷 디지털투데이":    "https://www.digitaltoday.co.kr/rss/allArticle.xml",
     "🇰🇷 코인리더스":     "http://www.coinreaders.com/rss/allArticle.xml",
+    # ═══════════════════════════════════════════════
+    #  🎥 영상 인터뷰 소스 (BitcoinSapiens/CryptoYuna 스타일)
+    #  YouTube 채널 RSS — 모두 실제 검증 완료 ✅
+    #  인터뷰 클리핑 탭에서 자막+영상 추출 가능
+    # ═══════════════════════════════════════════════
+    # ── 메이저 비즈니스/뉴스 방송 (Tom Lee, Saylor 단골 출연) ──
+    "🎬 CNBC Television":         "https://www.youtube.com/feeds/videos.xml?channel_id=UCrp_UI8XtuYfpiqluWLD7Lw",
+    "🎬 CNBC":                     "https://www.youtube.com/feeds/videos.xml?channel_id=UCvJJ_dzjViJCoLf5uKUTwoA",
+    "🎬 Bloomberg Television":     "https://www.youtube.com/feeds/videos.xml?channel_id=UCIALMKvObZNtJ6AmdCLP7Lg",
+    "🎬 Fox News (Fox Business)":  "https://www.youtube.com/feeds/videos.xml?channel_id=UCXIJgqnII2ZOINSWNOGFThA",
+    "🎬 Yahoo Finance":            "https://www.youtube.com/feeds/videos.xml?channel_id=UCEAZeUIeJs0IjQiqTCdVSIg",
+    # ── 금/비트코인 대안자산 (Lawrence Lepard 단골 출연) ──
+    "🎬 Kitco News":               "https://www.youtube.com/feeds/videos.xml?channel_id=UCEWyXYbIJGs1GX7VqKExjVg",
+    "🎬 ITM Trading":              "https://www.youtube.com/feeds/videos.xml?channel_id=UCom1i7_NVeSUNyJyuR_NbMQ",
+    # ── 크립토 전문 팟캐스트/인터뷰 (핵심 소스) ──
+    "🎬 What Bitcoin Did (Peter McCormack)": "https://www.youtube.com/feeds/videos.xml?channel_id=UCzv873y61SOt_70zJStsPJg",
+    "🎬 PBD Podcast / Valuetainment":        "https://www.youtube.com/feeds/videos.xml?channel_id=UCIHdDJ0tjn_3j-FS7s_X1kQ",
+    "🎬 Anthony Pompliano":        "https://www.youtube.com/feeds/videos.xml?channel_id=UCevXpeL8cNyAnww-NqJ4m2w",
+    "🎬 Altcoin Daily":            "https://www.youtube.com/feeds/videos.xml?channel_id=UCbLhGKVY-bJPcawebgtNfbw",
+    "🎬 Bankless":                 "https://www.youtube.com/feeds/videos.xml?channel_id=UCAl9Ld79qaZxp9JzEOwd3aA",
+    "🎬 Bitcoin Magazine":         "https://www.youtube.com/feeds/videos.xml?channel_id=UCJl3S8A-5ExFMbeJN0KtOBA",
+    "🎬 Bits + Bips (Unchained)":  "https://www.youtube.com/feeds/videos.xml?channel_id=UCuKiSkbYrUOOEEiYQEVPniQ",
+    # ── 매크로/거시경제 (Saylor/Raoul Pal 단골 출연) ──
+    "🎬 Real Vision":              "https://www.youtube.com/feeds/videos.xml?channel_id=UCwSVtQvURxiyn1CQeyoExZg",
+    # ── 다국어 (Sky News Arabia - Saylor 아랍어 인터뷰) ──
+    "🎬 Sky News Arabia":          "https://www.youtube.com/feeds/videos.xml?channel_id=UCIJXOvggjKtCagMfxvcCzAA",
 }
 
 KOREAN_FEEDS = {"🇰🇷 블록미디어", "🇰🇷 디지털투데이", "🇰🇷 코인리더스"}
@@ -218,6 +244,32 @@ X_INFLUENCERS = {
     "📈 Willy Woo":          "Willy+Woo+bitcoin+OR+on-chain",
     "📈 PlanB":              "PlanB+bitcoin+OR+stock-to-flow",
     "📈 Tom Lee":            "Tom+Lee+Fundstrat+bitcoin+OR+crypto",
+    # ═══════════════════════════════════════════════
+    #  🎤 CryptoYuna 스타일 인터뷰 단골 게스트 (신규)
+    # ═══════════════════════════════════════════════
+    "🎤 Lawrence Lepard":    "%22Lawrence+Lepard%22+bitcoin+OR+EMA+OR+gold",
+    "🎤 Nigel Farage":       "%22Nigel+Farage%22+bitcoin+OR+crypto+OR+%22Stack+BTC%22",
+    "🎤 Stack BTC":          "%22Stack+BTC%22+bitcoin+OR+treasury+OR+UK",
+    "🎤 Samson Mow":         "%22Samson+Mow%22+bitcoin+OR+JAN3+OR+%22nation+state%22",
+    "🎤 Adam Back":          "%22Adam+Back%22+bitcoin+OR+Blockstream",
+    "🎤 Fred Thiel (MARA)":  "%22Fred+Thiel%22+bitcoin+OR+MARA+OR+mining",
+    "🎤 Max Keiser":         "%22Max+Keiser%22+bitcoin+OR+El+Salvador",
+    "🎤 Saifedean Ammous":   "%22Saifedean+Ammous%22+bitcoin+OR+%22Bitcoin+Standard%22",
+    "🎤 Lyn Alden":          "%22Lyn+Alden%22+bitcoin+OR+macro+OR+dollar",
+    "🎤 Preston Pysh":       "%22Preston+Pysh%22+bitcoin+OR+investor+OR+podcast",
+    "🎤 Greg Foss":          "%22Greg+Foss%22+bitcoin+OR+credit+OR+default",
+    "🎤 Luke Gromen":        "%22Luke+Gromen%22+bitcoin+OR+dollar+OR+treasury",
+    "🎤 Peter McCormack":    "%22Peter+McCormack%22+bitcoin+OR+%22What+Bitcoin+Did%22",
+    "🎤 Patrick Bet-David":  "%22Patrick+Bet-David%22+bitcoin+OR+crypto+OR+PBD",
+    "🎤 Natalie Brunell":    "%22Natalie+Brunell%22+bitcoin+OR+%22Coin+Stories%22",
+    # ═══════════════════════════════════════════════
+    #  🌐 정치/정부 (Trump/Iran/Pakistan 등 큰 이슈)
+    # ═══════════════════════════════════════════════
+    "🏛️ JD Vance":           "%22JD+Vance%22+bitcoin+OR+crypto+OR+Iran",
+    "🏛️ Cynthia Lummis":     "%22Cynthia+Lummis%22+bitcoin+OR+crypto+OR+%22strategic+reserve%22",
+    "🏛️ Paul Atkins (SEC)":  "%22Paul+Atkins%22+SEC+OR+crypto+OR+bitcoin",
+    "🏛️ Hester Peirce":      "%22Hester+Peirce%22+SEC+OR+crypto+OR+bitcoin",
+    "🏛️ White House Crypto": "%22White+House%22+crypto+OR+bitcoin+OR+%22digital+asset%22",
     # ═══════════════════════════════════════════════
     #  🌍 대형 글로벌 인플루언서
     # ═══════════════════════════════════════════════
